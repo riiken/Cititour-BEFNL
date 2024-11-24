@@ -54,7 +54,7 @@ const callAiApi = async (prompt) => {
 
   const completion = await openai.chat.completions.create({
     messages: [{ role: 'system', content: structuredPrompt }],
-    model: 'gpt-4-turbo',
+    model: process.env.OPEN_AI_MODEL,
   });
 
   // Extract the message content from the AI response
