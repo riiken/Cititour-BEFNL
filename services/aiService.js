@@ -2,7 +2,7 @@ const axios = require('axios');
 const { default: OpenAI } = require('openai');
 require('dotenv').config();
 
-const openai = new OpenAI.OpenAI({ apiKey: `sk-proj-tFo2LIEagl11O30s4eCqT3BlbkFJP4Big2vadHE5hD4mfbrh` });
+const openai = new OpenAI.OpenAI({ apiKey: process.env.OPENAI_API_KEY});
 
 // const callAiApi = async (prompt) => {
 //   const completion = await openai.chat.completions.create({
