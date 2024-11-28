@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 const { v4: uuidv4 } = require('uuid');
 
 const HotelSchema = new mongoose.Schema({
-  hotelId: { type: Number, required: true, unique: true },
+  hotelId: { type: Number, required: true },
   name: { type: String, required: true },
   rating: { type: Number },
   reviewsCount: { type: Number },
@@ -35,7 +35,7 @@ const HotelSchema = new mongoose.Schema({
 });
 
 const restaurantSchema = new mongoose.Schema({
-    id: { type: Number, unique: true },
+    restaurantId: { type: Number, unique: true },
     name: { type: String, required: true },
     contacts: {
       streetAddress: {

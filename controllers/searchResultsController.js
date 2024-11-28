@@ -1,5 +1,6 @@
 const axios = require('axios');
 const Place = require('../model/Hotel');
+const { v4: uuidv4 } = require('uuid');
 require('dotenv').config();
 
 const getTodayAndNext7thDay = () => {
@@ -32,7 +33,7 @@ const getTodayAndNext7thDay = () => {
   
       const hotels = response?.data?.data || [];
       return hotels?.map((hotel) => ({
-        hotelId: hotel?.id,
+        hotelId: hotel?.id || uuidv4(),
         name: hotel?.name,
         rating: hotel?.rating,
         reviewsCount: hotel?.reviewsCount,
@@ -75,7 +76,7 @@ const getTodayAndNext7thDay = () => {
   
       const restaurants = response?.data?.data || [];
       return restaurants?.map((restaurant) => ({
-        restaurantId: restaurant?.id,
+        restaurantId: restaurant?.id || uuidv4(),
         name: restaurant?.name,
         rating: restaurant?.rating,
         reviewsCount: restaurant?.reviewsCount,
