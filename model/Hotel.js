@@ -35,7 +35,7 @@ const HotelSchema = new mongoose.Schema({
 });
 
 const restaurantSchema = new mongoose.Schema({
-    restaurantId: { type: Number, unique: true },
+    restaurantId: { type: Number||String,default: uuidv4 },
     name: { type: String, required: true },
     contacts: {
       streetAddress: {
@@ -59,10 +59,56 @@ const restaurantSchema = new mongoose.Schema({
     longitude: { type: Number },
   });
 
+  const TourSchema = new mongoose.Schema({
+    tourId: { type: String, default: uuidv4 },
+    title: { type: String, required: true },
+    description: { type: String },
+    category: { type: String },
+    duration: { type: String },
+    cancellation: { type: String },
+    languages: { type: [String] },
+    operator: { type: String },
+    price: { type: String },
+    priceText: { type: String },
+    rating: { type: Number },
+    reviewsCount: { type: String },
+    thumbnail: { type: String },
+    url: { type: String },
+    currency: { type: String },
+    createdAt: { type: Date, default: Date.now },
+  });
+
+  const VacationRentalSchema = new mongoose.Schema({
+    rentalId: { type: Number, required: true },
+    name: { type: String, required: true },
+    description: { type: String },
+    category: { type: String },
+    amenities: { type: [String], default: [] },
+    pricePerNight: {
+      amount: { type: Number },
+      amountUSD: { type: Number },
+      currency: { type: String },
+    },
+    bathCount: { type: Number },
+    roomCount: { type: Number },
+    sleepCount: { type: Number },
+    rating: { type: Number },
+    reviewsCount: { type: Number },
+    photos: { type: [String], default: [] },
+    latitude: { type: Number },
+    longitude: { type: Number },
+    logo: { type: String },
+    url: { type: String },
+    currency: { type: String },
+    createdAt: { type: Date, default: Date.now },
+  });
+
 const PlaceSchema = new mongoose.Schema({
     place: { type: String, required: true, unique: true }, // Location name (e.g., Bangalore)
     hotels: [HotelSchema], // Array of hotels
     restaurants: [restaurantSchema],
+    tours: [TourSchema],
+    // vacationRentals: [VacationRentalSchema],
     createdAt: { type: Date, default: Date.now },
   });
   

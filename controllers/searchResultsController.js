@@ -107,6 +107,79 @@ const getTodayAndNext7thDay = () => {
     }
   };
 
+  const fetchToursFromAPI = async (location, checkIn, checkOut) => {
+    try {
+      const response = await axios.get(process.env.TRIPADVISOR_API_URL + '/tripadvisor_tours_search', {
+        headers: {
+          'X-RapidAPI-Key': process.env.RAPIDAPI_KEY,
+          'X-RapidAPI-Host': 'real-time-tripadvisor-scraper-api.p.rapidapi.com',
+        },
+        params: { location, checkIn, checkOut },
+      });
+  
+      const tours = response?.data?.data || [];
+      return tours.map((tour) => ({
+        tourId: tour?.id || uuidv4(),
+        title: tour?.title,
+        description: tour?.description,
+        category: tour?.category,
+        duration: tour?.duration,
+        cancellation: tour?.cancellation,
+        languages: tour?.languages || [],
+        operator: tour?.operator,
+        price: tour?.price,
+        priceText: tour?.priceText,
+        rating: tour?.rating,
+        reviewsCount: tour?.reviewsCount,
+        thumbnail: tour?.thumbnail,
+        url: tour?.url,
+        currency: tour?.currency,
+      }));
+    } catch (error) {
+      console.error('Error fetching tours from API:', error.message);
+      throw new Error('Failed to fetch tours from API');
+    }
+  };
+
+  // const fetchVacationRentsFromAPI = async (location, checkIn, checkOut) => {
+  //   try {
+  //     const response = await axios.get(process.env.TRIPADVISOR_API_URL + '/tripadvisor_vacation_rent_search', {
+  //       headers: {
+  //         'X-RapidAPI-Key': process.env.RAPIDAPI_KEY,
+  //         'X-RapidAPI-Host': 'real-time-tripadvisor-scraper-api.p.rapidapi.com',
+  //       },
+  //       params: { location, checkIn, checkOut },
+  //     });
+  //     console.log("vacationrentals",response.data);
+  //     const vacationRentals = response?.data?.data || [];
+  //     return vacationRentals.map((rental) => ({
+  //       rentalId: rental?.id || uuidv4(),
+  //       name: rental?.name,
+  //       description: rental?.description,
+  //       category: rental?.category,
+  //       amenities: rental?.amenities || [],
+  //       bathCount: rental?.bathCount,
+  //       roomCount: rental?.roomCount,
+  //       sleepCount: rental?.sleepCount,
+  //       pricePerNight: rental?.pricePerNight?.[0]?.rate?.amountUSD || rental?.pricePerNight?.[0]?.rate?.amount || 0,
+  //       currency: rental?.currency,
+  //       rating: rental?.rating,
+  //       reviewsCount: rental?.reviewsCount,
+  //       location: {
+  //         latitude: rental?.latitude,
+  //         longitude: rental?.longitude,
+  //       },
+  //       logo: rental?.logo,
+  //       photos: rental?.photos || [],
+  //       url: rental?.url,
+  //     }));
+  //   } catch (error) {
+  //     console.error('Error fetching vacation rentals from API:', error.message);
+  //     throw new Error('Failed to fetch vacation rentals from API');
+  //   }
+  // };
+
+
 
 const fetchHotels = async (req, res) => {
     const { location, checkIn = getTodayAndNext7thDay()?.today, checkOut = getTodayAndNext7thDay()?.next7thDay, sort = 'BEST_VALUE', locale = 'en-US', currency = 'INR' } = req.body;
@@ -117,27 +190,41 @@ const fetchHotels = async (req, res) => {
     let placeData = await Place.findOne({ place:location?.toLowerCase() });
     if (placeData) {
         // Check if hotels are missing but restaurants exist
-        if ((!placeData.hotels || placeData.hotels.length === 0) && placeData.restaurants && placeData.restaurants.length > 0) {
+        if ((!placeData.hotels || placeData.hotels.length === 0)) {
           const formattedHotels = await fetchHotelsFromAPI(location, checkIn, checkOut);
           placeData.hotels = formattedHotels;
           await placeData.save();
         }
   
         // Check if restaurants are missing but hotels exist
-        if ((!placeData.restaurants || placeData.restaurants.length === 0) && placeData.hotels && placeData.hotels.length > 0) {
+        if ((!placeData.restaurants || placeData.restaurants.length === 0)) {
           const formattedRestaurants = await fetchRestaurantsFromAPI(location);
-          console.log("formattedres",formattedRestaurants);
           placeData.restaurants = formattedRestaurants;
           await placeData.save();
         }
+
+        if ((!placeData.tours || placeData.tours.length === 0)) {
+          const formattedTours = await fetchToursFromAPI(location, checkIn, checkOut);
+          placeData.tours = formattedTours;
+          await placeData.save();
+        }
+
+       
+        // if ((!placeData.vacationRentals || placeData.vacationRentals.length === 0)) {
+        //   const formattedVacationRentals = await fetchVacationRentsFromAPI(location, checkIn, checkOut);
+        //   placeData.vacationRentals = formattedVacationRentals;
+        //   await placeData.save();
+        // }
   
         return res.json({ source: 'db', data: placeData });
       }
 
     const formattedHotels = await fetchHotelsFromAPI(location, checkIn, checkOut);
     const formattedRestaurants = await fetchRestaurantsFromAPI(location);
+    const formattedTours = await fetchToursFromAPI(location, checkIn, checkOut);
+    // const formattedVacationRentals = await fetchVacationRentsFromAPI(location, checkIn, checkOut);
 
-    const newPlace = new Place({ place:location?.toLowerCase(), hotels:formattedHotels,restaurants: formattedRestaurants, });
+    const newPlace = new Place({ place:location?.toLowerCase(), hotels:formattedHotels,restaurants: formattedRestaurants, tours:formattedTours});
     await newPlace.save();
 
     return res.json({ source: 'api', data: newPlace });
