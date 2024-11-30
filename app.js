@@ -7,8 +7,23 @@ require('dotenv').config();
 
 const app = express();
 
+const allowedOrigins = [
+    'http://localhost:4200',
+    'https://cititour.onrender.com'
+  ];
+
+  const corsOptions = {
+    origin: function (origin, callback) {
+        console.log(origin);
+      if (allowedOrigins.indexOf(origin) !== -1) { // !origin for testing in Postman
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
+  };
 // Middleware
-app.use(cors()); // Enable CORS for all routes
+app.use(cors(corsOptions)); // Enable CORS for all routes
 app.use(express.json());
 
 // Connect to DB
