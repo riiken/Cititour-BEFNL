@@ -77,4 +77,29 @@ const callAiApi = async (prompt) => {
 };
 
 
-module.exports = { callAiApi };
+const callOpenAIPrompt = async (prompt) => {
+  const completion = await openai.chat.completions.create({
+    messages: [{ role: 'system', content: prompt }],
+    model: process.env.OPEN_AI_MODEL,
+  });
+
+  // Extract the message content from the AI response
+  const responseContent = completion.choices[0].message.content;
+
+  // Assuming the response is valid JSON, parse it
+  try {
+    const parsedResponse = JSON.parse(responseContent);
+    return parsedResponse;
+  } catch (error) {
+    // If parsing fails, return a default structured response
+    console.error('Error parsing AI response:', error.message);
+    return {
+      name: 'Not available',
+      image: '',
+      description: '',
+      discount: '',
+    };
+  }
+};
+
+module.exports = { callAiApi , callOpenAIPrompt };

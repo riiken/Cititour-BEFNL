@@ -23,7 +23,7 @@ const getTodayAndNext7thDay = () => {
 
   const fetchHotelsFromAPI = async (location, checkIn, checkOut) => {
     try {
-      const response = await axios.get(process.env.TRIPADVISOR_API_URL+'/tripadvisor_hotels_search', {
+      const response = await axios.get(process.env.TRIPADVISOR_API_URL+'/tripadvisor_hotels_search_v2', {
         headers: {
           'X-RapidAPI-Key': process.env.RAPIDAPI_KEY,
           'X-RapidAPI-Host': 'real-time-tripadvisor-scraper-api.p.rapidapi.com',
@@ -66,7 +66,7 @@ const getTodayAndNext7thDay = () => {
 
   const fetchRestaurantsFromAPI = async (location, sort = 'FEATURED', locale = 'en-US', currency = 'INR') => {
     try {
-      const response = await axios.get(process.env.TRIPADVISOR_API_URL  + '/tripadvisor_restaurants_search', {
+      const response = await axios.get(process.env.TRIPADVISOR_API_URL  + '/tripadvisor_restaurants_search_v2', {
         headers: {
           'X-RapidAPI-Key': process.env.RAPIDAPI_KEY,
           'X-RapidAPI-Host': 'real-time-tripadvisor-scraper-api.p.rapidapi.com',
@@ -109,7 +109,7 @@ const getTodayAndNext7thDay = () => {
 
   const fetchToursFromAPI = async (location, checkIn, checkOut) => {
     try {
-      const response = await axios.get(process.env.TRIPADVISOR_API_URL + '/tripadvisor_tours_search', {
+      const response = await axios.get(process.env.TRIPADVISOR_API_URL + '/tripadvisor_tours_search_v2', {
         headers: {
           'X-RapidAPI-Key': process.env.RAPIDAPI_KEY,
           'X-RapidAPI-Host': 'real-time-tripadvisor-scraper-api.p.rapidapi.com',
@@ -127,13 +127,13 @@ const getTodayAndNext7thDay = () => {
         cancellation: tour?.cancellation,
         languages: tour?.languages || [],
         operator: tour?.operator,
-        price: tour?.price,
+        price: tour?.price?.total,
         priceText: tour?.priceText,
         rating: tour?.rating,
         reviewsCount: tour?.reviewsCount,
         thumbnail: tour?.thumbnail,
         url: tour?.url,
-        currency: tour?.currency,
+        currency: tour?.price?.currency,
       }));
     } catch (error) {
       console.error('Error fetching tours from API:', error.message);
