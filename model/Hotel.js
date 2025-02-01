@@ -4,30 +4,22 @@ const { v4: uuidv4 } = require('uuid');
 const HotelSchema = new mongoose.Schema({
   hotelId: { type: Number, required: true },
   name: { type: String, required: true },
-  rating: { type: Number },
+  rating: { type: mongoose.Schema.Types.Mixed },
   reviewsCount: { type: Number },
   priceMin: { type: Number },
   priceMax: { type: Number },
   amenities: [String],
   categoryTitle: { type: String },
-  contacts: {
-    streetAddress: { 
-        city: { type: String },
-        state: { type: String },
-        country: { type: String },
-        postalCode: { type: String },
-        fullAddress: { type: String },
-        street1: { type: String },
-        street2: { type: String },
-     },
-    telephone: { type: String },
-  },
+  contacts: {type:Object},
   location: {
     latitude: { type: Number },
     longitude: { type: Number },
   },
+  ranking:{type:Object},
   thumbnail: { type: String },
   url: { type: String },
+  styles:{type:Object},
+  photos:[String],
   currency: { type: String },
   typeTitle: { type: String },
   createdAt: { type: Date, default: Date.now },
@@ -35,18 +27,13 @@ const HotelSchema = new mongoose.Schema({
 });
 
 const restaurantSchema = new mongoose.Schema({
-    restaurantId: { type: Number||String,default: uuidv4 },
     name: { type: String, required: true },
-    contacts: {
-      streetAddress: {
-        fullAddress: { type: String },
-        country: { type: String },
-        postalCode: { type: String },
-      },
-      telephone: { type: String },
-    },
+    address: {type:Object},
+    phone:{type:String},
+    photos:[String],
     cuisines: { type: [String], default: [] },
     currency: { type: String },
+    link:{type:String},
     menu: { type: String },
     openStatus: { type: String },
     openStatusText: { type: String },
@@ -54,13 +41,13 @@ const restaurantSchema = new mongoose.Schema({
     rating: { type: Number },
     reviewsCount: { type: Number },
     thumbnail: { type: String },
-    url: { type: String },
-    latitude: { type: Number },
-    longitude: { type: Number },
+    id:{type:String}
   });
 
   const TourSchema = new mongoose.Schema({
-    tourId: { type: String, default: uuidv4 },
+    id: { type: String},
+    image:{type:String},
+    photos:[String],
     title: { type: String, required: true },
     description: { type: String },
     category: { type: String },
@@ -69,10 +56,8 @@ const restaurantSchema = new mongoose.Schema({
     languages: { type: [String] },
     operator: { type: String },
     price: { type: String },
-    priceText: { type: String },
     rating: { type: Number },
     reviewsCount: { type: String },
-    thumbnail: { type: String },
     url: { type: String },
     currency: { type: String },
     createdAt: { type: Date, default: Date.now },

@@ -37,26 +37,32 @@ const getTodayAndNext7thDay = () => {
         name: hotel?.name,
         rating: hotel?.rating,
         reviewsCount: hotel?.reviewsCount,
-        priceMin: hotel?.priceMin,
-        priceMax: hotel?.priceMax,
+        priceMin: hotel?.price?.priceMin,
+        priceMax: hotel?.price?.priceMax,
         amenities: hotel?.amenities || [],
         categoryTitle: hotel?.categoryTitle,
         contacts: {
-          streetAddress: hotel?.contacts?.streetAddress,
-          city: hotel?.contacts?.city,
-          state: hotel?.contacts?.state,
-          country: hotel?.contacts?.country,
-          postalCode: hotel?.contacts?.postalCode,
-          telephone: hotel?.contacts?.telephone,
+          streetAddress: hotel?.address?.fullAddress,
+          city: hotel?.address?.city,
+          state: hotel?.address?.state,
+          country: hotel?.address?.country,
+          postalCode: hotel?.address?.postalCode,
+          telephone: hotel?.address?.telephone,
+          phone:hotel?.contacts.phone,
+          email:hotel?.contacts.email,
+          website:hotel?.contacts.website
         },
         location: {
-          latitude: hotel?.latitude,
-          longitude: hotel?.longitude,
+          latitude: hotel?.address?.latitude,
+          longitude: hotel?.address?.longitude,
         },
         thumbnail: hotel?.thumbnail,
-        url: hotel?.url,
-        currency: hotel?.currency,
+        url: hotel?.link,
+        ranking:hotel?.ranking,
+        currency: hotel?.price?.currency,
         typeTitle: hotel?.typeTitle,
+        photos:hotel?.photos,
+        styles:hotel?.styles
       }));
     } catch (error) {
       console.error('Error fetching hotels from API:', error.message);
@@ -76,30 +82,21 @@ const getTodayAndNext7thDay = () => {
   
       const restaurants = response?.data?.data || [];
       return restaurants?.map((restaurant) => ({
-        restaurantId: restaurant?.id || uuidv4(),
         name: restaurant?.name,
         rating: restaurant?.rating,
         reviewsCount: restaurant?.reviewsCount,
         priceTypes: restaurant?.priceTypes,
         cuisines: restaurant?.cuisines || [],
-        contacts: {
-          streetAddress:{
-          country: restaurant?.contacts?.country,
-          fullAddress: restaurant?.contacts?.fullAddress,
-          postalCode: restaurant?.contacts?.postalCode,
-          },
-          telephone: restaurant?.contacts?.telephone,
-        },
-        location: {
-          latitude: restaurant?.latitude,
-          longitude: restaurant?.longitude,
-        },
+        link:restaurant?.link,
+        address: restaurant?.address,
+        phone:restaurant?.telephone?.toString(),
+        photos:restaurant?.photos,
         menu: restaurant?.menu,
         thumbnail: restaurant?.thumbnail,
-        url: restaurant?.url,
         openStatus: restaurant?.openStatus,
         openStatusText: restaurant?.openStatusText,
         currency: restaurant?.currency,
+        id:restaurant?.id?.toString()
       }));
     } catch (error) {
       console.error('Error fetching restaurants from API:', error.message);
@@ -119,7 +116,9 @@ const getTodayAndNext7thDay = () => {
   
       const tours = response?.data?.data || [];
       return tours.map((tour) => ({
-        tourId: tour?.id || uuidv4(),
+        image:tour?.image,
+        id:tour?.id,
+        photos:tour?.photos,
         title: tour?.title,
         description: tour?.description,
         category: tour?.category,
@@ -128,10 +127,8 @@ const getTodayAndNext7thDay = () => {
         languages: tour?.languages || [],
         operator: tour?.operator,
         price: tour?.price?.total,
-        priceText: tour?.priceText,
         rating: tour?.rating,
         reviewsCount: tour?.reviewsCount,
-        thumbnail: tour?.thumbnail,
         url: tour?.url,
         currency: tour?.price?.currency,
       }));
