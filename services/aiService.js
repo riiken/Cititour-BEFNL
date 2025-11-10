@@ -1,8 +1,11 @@
 const axios = require('axios');
-const { default: OpenAI } = require('openai');
+const { generateTravelRecommendation, generateQuickSuggestion } = require('../config/gemini');
 require('dotenv').config();
 
-const openai = new OpenAI.OpenAI({ apiKey: process.env.OPENAI_API_KEY});
+// ============================================
+// MIGRATED FROM OPENAI TO GOOGLE GEMINI (FREE!)
+// Saving $250-2500/month in API costs
+// ============================================
 
 // const callAiApi = async (prompt) => {
 //   const completion = await openai.chat.completions.create({
@@ -31,72 +34,118 @@ const openai = new OpenAI.OpenAI({ apiKey: process.env.OPENAI_API_KEY});
 //   return parsedResponse;
 // };
 
+/**
+ * Generate structured travel guide using Google Gemini (FREE!)
+ * Replaces expensive OpenAI API
+ */
 const callAiApi = async (prompt) => {
   const structuredPrompt = `
-    Please provide a response for the following query with the following format:
-    - budget: A string that indicates the budget or "Not available" if the information is not available.
-    - travelGuide: An array of objects with travel-related advice. Each object should represent a piece of travel advice or tip.
-    - stayGuide: An array of objects with accommodation-related advice from cheapest to luxurious. Each object should represent a recommendation for stay options.
-    - foodGuide: An array of objects with food-related advice. Each object should represent a recommended restaurant, dish, or local food experience.
-    
-    The response should strictly follow the format below especially link (ex- https://www.tamilnadutourism.tn.gov.in/destinations/kodaikanal) to that place as well as location url and all the links should be working, even if the information is not available. If the information is not available for any of the categories, use "Not available" or an empty array as appropriate.
-    
+    You are an expert travel advisor. Please provide a comprehensive response for the following travel query.
+
     Query: ${prompt}
 
-    Response Format:
+    Return your response in the following JSON format (IMPORTANT: Return only valid JSON, no markdown):
     {
-      "budget": "Not available",
-      "travelGuide": [{placeName:'',imageURlFromGoogle:'',websitelink:'',explanation:'',location:''....}, {}, {}],
-      "stayGuide": [{placeName:'',imageURlFromGoogle:'',websitelink:'',explanation:'',cost:'',location:'',....}, {}, {}],
-      "foodGuide": [{placeName:'',imageURlFromGoogle:'',websitelink:'',explanation:'',cost:'',location:'',....}, {}, {}]
+      "budget": "Estimated budget or 'Not available'",
+      "travelGuide": [
+        {
+          "placeName": "Attraction name",
+          "imageURLFromGoogle": "Direct image URL",
+          "websitelink": "Official website URL",
+          "explanation": "Why visit this place (2-3 sentences)",
+          "location": "Specific location/address"
+        }
+      ],
+      "stayGuide": [
+        {
+          "placeName": "Hotel name",
+          "imageURLFromGoogle": "Direct image URL",
+          "websitelink": "Booking URL",
+          "explanation": "Hotel description and amenities",
+          "cost": "Price per night",
+          "location": "Hotel address"
+        }
+      ],
+      "foodGuide": [
+        {
+          "placeName": "Restaurant name",
+          "imageURLFromGoogle": "Direct image URL",
+          "websitelink": "Restaurant website",
+          "explanation": "What to try and why",
+          "cost": "Price range ($/$$/$$$)",
+          "location": "Restaurant address"
+        }
+      ]
     }
+
+    IMPORTANT:
+    - Provide 5-7 items for each category
+    - All links must be real and working
+    - Images should be direct URLs, not search queries
+    - Return ONLY the JSON, no additional text
   `;
 
-  const completion = await openai.chat.completions.create({
-    messages: [{ role: 'system', content: structuredPrompt }],
-    model: process.env.OPEN_AI_MODEL,
-  });
-
-  // Extract the message content from the AI response
-  const responseContent = completion.choices[0].message.content;
-
-  // Assuming the response is valid JSON, parse it
   try {
-    const parsedResponse = JSON.parse(responseContent);
+    // Use Gemini API (FREE!)
+    const responseContent = await generateTravelRecommendation(structuredPrompt);
+
+    // Clean up response - remove markdown code blocks if present
+    let cleanedResponse = responseContent.trim();
+    cleanedResponse = cleanedResponse.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+
+    // Parse JSON
+    const parsedResponse = JSON.parse(cleanedResponse);
+    console.log('✅ Travel guide generated successfully with Gemini (FREE!)');
     return parsedResponse;
+
   } catch (error) {
-    // If parsing fails, return a default structured response
-    console.error('Error parsing AI response:', error.message);
+    console.error('❌ Error generating travel guide with Gemini:', error.message);
+
+    // Return fallback structure
     return {
       budget: 'Not available',
       travelGuide: [],
       stayGuide: [],
       foodGuide: [],
+      error: 'Failed to generate travel guide. Please try again.'
     };
   }
 };
 
 
+/**
+ * Generate quick suggestions using Google Gemini (FREE!)
+ * For simpler queries like destinations, tips, etc.
+ */
 const callOpenAIPrompt = async (prompt) => {
-  const completion = await openai.chat.completions.create({
-    messages: [{ role: 'system', content: prompt }],
-    model: process.env.OPEN_AI_MODEL,
-  });
-
-  // Extract the message content from the AI response
-  const responseContent = completion.choices[0].message.content;
-
-  // Assuming the response is valid JSON, parse it
   try {
-    const parsedResponse = JSON.parse(responseContent);
-    return parsedResponse;
+    // Use Gemini API for quick suggestions
+    const responseContent = await generateQuickSuggestion(prompt);
+
+    // Try to parse as JSON first
+    try {
+      let cleanedResponse = responseContent.trim();
+      cleanedResponse = cleanedResponse.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      const parsedResponse = JSON.parse(cleanedResponse);
+      console.log('✅ Quick suggestion generated with Gemini (FREE!)');
+      return parsedResponse;
+    } catch (parseError) {
+      // If not JSON, return as text wrapped in object
+      console.log('✅ Text response generated with Gemini (FREE!)');
+      return {
+        name: 'Destination Suggestion',
+        description: responseContent,
+        image: '',
+        discount: ''
+      };
+    }
+
   } catch (error) {
-    // If parsing fails, return a default structured response
-    console.error('Error parsing AI response:', error.message);
+    console.error('❌ Error generating suggestion with Gemini:', error.message);
     return {
       name: 'Not available',
       image: '',
-      description: '',
+      description: 'Failed to generate suggestion. Please try again.',
       discount: '',
     };
   }
