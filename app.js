@@ -6,6 +6,7 @@ const connectDB = require('./config/db');
 const logger = require('./config/logger');
 const aiRoutes = require('./routes/aiRoutes');
 const authRoutes = require('./routes/authRoutes');
+const destinationRoutes = require('./routes/destinationRoutes');
 const { apiLimiter } = require('./middleware/rateLimiter');
 const { sanitizeBody } = require('./middleware/validation');
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
@@ -97,6 +98,9 @@ app.use('/api/auth', authRoutes);
 
 // AI Routes
 app.use('/api/ai', aiRoutes);
+
+// Destination Routes (Wikipedia, Weather, Images, Travel Data)
+app.use('/api/destinations', destinationRoutes);
 
 // ============================================
 // ERROR HANDLING

@@ -1,5 +1,6 @@
 const axios = require('axios');
 const { generateTravelRecommendation, generateQuickSuggestion } = require('../config/gemini');
+const { generateGroqRecommendation, generateGroqQuickSuggestion, isGroqAvailable } = require('../config/groq');
 require('dotenv').config();
 
 // ============================================
@@ -35,8 +36,8 @@ require('dotenv').config();
 // };
 
 /**
- * Generate structured travel guide using Google Gemini (FREE!)
- * Replaces expensive OpenAI API
+ * Generate structured travel guide using AI (Gemini with Groq fallback)
+ * Replaces expensive OpenAI API with FREE alternatives
  */
 const callAiApi = async (prompt) => {
   const structuredPrompt = `
@@ -85,8 +86,9 @@ const callAiApi = async (prompt) => {
     - Return ONLY the JSON, no additional text
   `;
 
+  // Try Gemini first
   try {
-    // Use Gemini API (FREE!)
+    console.log('🔄 Trying Gemini AI (primary provider)...');
     const responseContent = await generateTravelRecommendation(structuredPrompt);
 
     // Clean up response - remove markdown code blocks if present
@@ -98,28 +100,50 @@ const callAiApi = async (prompt) => {
     console.log('✅ Travel guide generated successfully with Gemini (FREE!)');
     return parsedResponse;
 
-  } catch (error) {
-    console.error('❌ Error generating travel guide with Gemini:', error.message);
+  } catch (geminiError) {
+    console.warn('⚠️  Gemini failed:', geminiError.message);
+    console.log('🔄 Falling back to Groq AI (LLaMA 3.3)...');
 
-    // Return fallback structure
-    return {
-      budget: 'Not available',
-      travelGuide: [],
-      stayGuide: [],
-      foodGuide: [],
-      error: 'Failed to generate travel guide. Please try again.'
-    };
+    // Fallback to Groq
+    try {
+      const responseContent = await generateGroqRecommendation(structuredPrompt);
+
+      // Clean up response - remove markdown code blocks if present
+      let cleanedResponse = responseContent.trim();
+      cleanedResponse = cleanedResponse.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+
+      // Parse JSON
+      const parsedResponse = JSON.parse(cleanedResponse);
+      console.log('✅ Travel guide generated successfully with Groq (FREE - Fallback!)');
+      console.log(cleanedResponse,parsedResponse);
+      return parsedResponse;
+
+    } catch (groqError) {
+      console.error('❌ Both Gemini and Groq failed!');
+      console.error('   Gemini error:', geminiError.message);
+      console.error('   Groq error:', groqError.message);
+
+      // Return fallback structure
+      return {
+        budget: 'Not available',
+        travelGuide: [],
+        stayGuide: [],
+        foodGuide: [],
+        error: 'Failed to generate travel guide. Both AI providers are unavailable. Please try again later.'
+      };
+    }
   }
 };
 
 
 /**
- * Generate quick suggestions using Google Gemini (FREE!)
+ * Generate quick suggestions using AI (Gemini with Groq fallback)
  * For simpler queries like destinations, tips, etc.
  */
 const callOpenAIPrompt = async (prompt) => {
+  // Try Gemini first
   try {
-    // Use Gemini API for quick suggestions
+    console.log('🔄 Trying Gemini AI for quick suggestion...');
     const responseContent = await generateQuickSuggestion(prompt);
 
     // Try to parse as JSON first
@@ -140,14 +164,44 @@ const callOpenAIPrompt = async (prompt) => {
       };
     }
 
-  } catch (error) {
-    console.error('❌ Error generating suggestion with Gemini:', error.message);
-    return {
-      name: 'Not available',
-      image: '',
-      description: 'Failed to generate suggestion. Please try again.',
-      discount: '',
-    };
+  } catch (geminiError) {
+    console.warn('⚠️  Gemini failed for quick suggestion:', geminiError.message);
+    console.log('🔄 Falling back to Groq AI...');
+
+    // Fallback to Groq
+    try {
+      const responseContent = await generateGroqQuickSuggestion(prompt);
+
+      // Try to parse as JSON first
+      try {
+        let cleanedResponse = responseContent.trim();
+        cleanedResponse = cleanedResponse.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+        const parsedResponse = JSON.parse(cleanedResponse);
+        console.log('✅ Quick suggestion generated with Groq (FREE - Fallback!)');
+        return parsedResponse;
+      } catch (parseError) {
+        // If not JSON, return as text wrapped in object
+        console.log('✅ Text response generated with Groq (FREE - Fallback!)');
+        return {
+          name: 'Destination Suggestion',
+          description: responseContent,
+          image: '',
+          discount: ''
+        };
+      }
+
+    } catch (groqError) {
+      console.error('❌ Both Gemini and Groq failed for quick suggestion!');
+      console.error('   Gemini error:', geminiError.message);
+      console.error('   Groq error:', groqError.message);
+
+      return {
+        name: 'Not available',
+        image: '',
+        description: 'Failed to generate suggestion. Both AI providers are unavailable. Please try again later.',
+        discount: '',
+      };
+    }
   }
 };
 

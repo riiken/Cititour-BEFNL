@@ -22,6 +22,9 @@ const {
   emailLimiter
 } = require('../middleware/rateLimiter');
 
+// Authentication middleware
+const { optionalAuth, trackUsage } = require('../middleware/auth');
+
 // ============================================
 // AI ROUTES WITH VALIDATION & RATE LIMITING
 // ============================================
@@ -29,9 +32,12 @@ const {
 /**
  * POST /api/ai/query
  * Generate AI travel recommendations
- * Rate Limited: 20 requests/hour
+ * Rate Limited: 20 requests/hour (guest) or per-tier limit (authenticated)
+ * Optional Authentication: Tracks usage for logged-in users
  */
 router.post('/query',
+  optionalAuth,        // Optional authentication (allows guests)
+  trackUsage('ai'),    // Track AI usage for authenticated users
   aiLimiter,           // Apply AI-specific rate limiting
   validateAIQuery,     // Validate query input
   handleQuery          // Handle request
@@ -40,9 +46,12 @@ router.post('/query',
 /**
  * POST /api/ai/recommendlocation
  * Search hotels, restaurants, tours for a location
- * Rate Limited: 50 requests/15min
+ * Rate Limited: 50 requests/15min (guest) or per-tier limit (authenticated)
+ * Optional Authentication: Tracks usage for logged-in users
  */
 router.post('/recommendlocation',
+  optionalAuth,           // Optional authentication
+  trackUsage('search'),   // Track search usage
   searchLimiter,          // Apply search-specific rate limiting
   validateLocationSearch, // Validate location input
   fetchHotels            // Handle request
@@ -52,19 +61,25 @@ router.post('/recommendlocation',
  * POST /api/ai/sendEmail
  * Send contact form email
  * Rate Limited: 5 requests/hour (prevent spam)
+ * Optional Authentication: Tracks usage for logged-in users
  */
 router.post('/sendEmail',
-  emailLimiter,      // Apply strict email rate limiting
-  validateEmail,     // Validate email fields
-  sendEmail          // Handle request
+  optionalAuth,        // Optional authentication
+  trackUsage('email'), // Track email usage
+  emailLimiter,        // Apply strict email rate limiting
+  validateEmail,       // Validate email fields
+  sendEmail            // Handle request
 );
 
 /**
  * POST /api/ai/popularLocation
  * Get popular destinations with images
- * Rate Limited: 50 requests/15min
+ * Rate Limited: 50 requests/15min (guest) or per-tier limit (authenticated)
+ * Optional Authentication: Tracks usage for logged-in users
  */
 router.post('/popularLocation',
+  optionalAuth,             // Optional authentication
+  trackUsage('search'),     // Track search usage
   searchLimiter,            // Apply search-specific rate limiting
   validatePopularLocation,  // Validate location input
   fetchImageFromPexels     // Handle request
