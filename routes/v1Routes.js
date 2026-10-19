@@ -7,6 +7,7 @@ const { validateRequest } = require('../middleware/validation');
 const { createItinerary, getItinerary, recordEvent } = require('../controllers/itineraryController');
 const listingRoutes = require('./listingRoutes');
 const tripEdit = require('../controllers/tripEditController');
+const { explore } = require('../controllers/exploreController');
 
 const router = express.Router();
 
@@ -71,6 +72,24 @@ router.get('/itineraries/:id',
   param('id').isString().isLength({ min: 8, max: 20 }).matches(/^[A-Za-z0-9_-]+$/),
   validateRequest,
   getItinerary
+);
+
+// ---------------------------------------------------------------- explore
+const exploreLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 120, standardHeaders: true, legacyHeaders: false });
+
+/**
+ * GET /api/v1/explore/:destination
+ * Real places to see, do, stay and eat for a destination (cached/free data only).
+ */
+router.get('/explore/:destination',
+  exploreLimiter,
+  optionalAuth,
+  param('destination').isString().trim().isLength({ min: 2, max: 100 }).matches(PLACE_PATTERN),
+  query('checkIn').optional().isISO8601({ strict: true }),
+  query('checkOut').optional().isISO8601({ strict: true }),
+  query('travellers').optional().isInt({ min: 1, max: 30 }).toInt(),
+  validateRequest,
+  explore
 );
 
 // ---------------------------------------------------------------- my trips & editing

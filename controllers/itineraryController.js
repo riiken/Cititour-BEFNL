@@ -7,7 +7,8 @@ const { getCityListings } = require('../services/listingsService');
 const { planItinerary, ITINERARY_PROMPT_VERSION } = require('../services/itineraryPlanner');
 const { reserveAiGeneration } = require('../services/aiBudget');
 const { mapsSearchLink, hotelBookingLink, activityBookingLink } = require('../services/linkBuilder');
-const { findApprovedNear, contactLinks } = require('../services/listingService');
+const { withPlaceLinks } = require('../services/placeLinks');
+const { findApprovedNear } = require('../services/listingService');
 const { distanceKm } = require('../services/destinationDataService');
 
 // Identical requests within this window reuse the stored plan (no AI cost)
@@ -56,35 +57,9 @@ const present = (itinerary, viewer) => {
   const city = (data.destination && data.destination.name) || request.destination;
   const adults = Number.isInteger(request.travellers) ? request.travellers : undefined;
 
-  const withItemLinks = (place) => {
-    if (!place) return place;
-    if (place.partner) {
-      // Direct contact with the business (they pay us per lead, not via affiliates)
-      const { contact, ...publicPlace } = place;
-      const links = contactLinks({ name: place.name, contact }, request);
-      return {
-        ...publicPlace,
-        ...links,
-        mapsLink: Number.isFinite(place.lat) ? `https://www.google.com/maps/search/?api=1&query=${place.lat},${place.lon}` : mapsSearchLink(place.name, city),
-        bookingLink: links.websiteLink || undefined
-      };
-    }
-    const links = { mapsLink: mapsSearchLink(place.name, city) };
-    if (place.kind === 'attraction' || place.kind === 'tour') {
-      links.bookingLink = activityBookingLink({ name: place.name, city });
-    }
-    if (place.kind === 'hotel' || place.kind === 'area') {
-      links.bookingLink = hotelBookingLink({
-        // Areas search by their landmark ("Lake Pichola, Udaipur")
-        name: place.kind === 'area' ? place.area : place.name,
-        city, checkIn: request.checkIn, checkOut: request.checkOut, adults
-      });
-    }
-    if (place.kind === 'area') {
-      links.mapsLink = mapsSearchLink(place.area, city);
-    }
-    return { ...place, ...links };
-  };
+  const withItemLinks = (place) => withPlaceLinks(place, {
+    city, checkIn: request.checkIn, checkOut: request.checkOut, travellers: request.travellers
+  });
 
   return {
     id: data.publicId,
