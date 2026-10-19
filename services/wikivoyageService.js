@@ -16,6 +16,8 @@ const API_URL = 'https://en.wikivoyage.org/w/api.php';
 const LISTING_TYPES = ['see', 'do', 'eat', 'drink', 'sleep', 'listing'];
 const MAX_REGION_CITIES = 5;
 const MIN_USEFUL_LISTINGS = 8;
+const MAX_GUIDES = 10;           // articles fetched per destination (region + towns)
+const FETCH_CONCURRENCY = 4;      // be polite to Wikimedia
 
 // ---------------------------------------------------------------------------
 // Wikitext parsing
@@ -123,13 +125,75 @@ const sectionLinks = (wikitext, heading) => {
 };
 
 /**
- * Sub-destinations of a region article: a few from "Cities" plus a few from
- * "Other destinations" (where beaches, parks and hill stations are listed).
+ * Sub-destinations of a region article from its "Cities" and "Other
+ * destinations" sections.
  */
-const regionCityLinks = (wikitext) => {
-  const cities = sectionLinks(wikitext, 'Cities').slice(0, 3);
-  const others = sectionLinks(wikitext, 'Other destinations').slice(0, 3);
-  return [...new Set([...cities, ...others])].slice(0, MAX_REGION_CITIES + 1);
+const regionCityLinks = (wikitext, { highlightsFirst = true } = {}) => {
+  // Alternate "Other destinations" (beaches, parks, hill stations - usually
+  // the visitor highlights) with "Cities", highlights first
+  const cities = sectionLinks(wikitext, 'Cities').slice(0, 8);
+  const others = sectionLinks(wikitext, 'Other destinations').slice(0, 8);
+  return [...new Set(interleave(highlightsFirst ? [others, cities] : [cities, others]))];
+};
+
+/**
+ * Highlights listed as map markers in a region's "Other destinations"
+ * section (beaches, parks, hill stations), e.g.
+ *   * {{marker|type=go|name=[[Anjuna]]|lat=15.58|long=73.74}} &mdash; a town with Anjuna Beach
+ * returned as attraction listings with coordinates.
+ */
+const destinationMarkers = (wikitext) => {
+  const section = wikitext.match(/==\s*Other destinations\s*==([\s\S]*?)(?:\n==[^=]|$)/i);
+  if (!section) return [];
+  const markers = [];
+  const pattern = /\{\{\s*marker\s*\|([\s\S]*?)\}\}([^\n]*)/gi;
+  let match;
+  while ((match = pattern.exec(section[1]))) {
+    const fields = splitArgs(match[1]);
+    const name = plain(fields.name, 120);
+    const lat = coordinate(fields.lat);
+    const lon = coordinate(fields.long || fields.lon);
+    if (!name || lat === undefined || lon === undefined) continue;
+    const description = plain(
+      match[2]
+        .replace(/&mdash;|&ndash;/g, '—')
+        .replace(/&amp;/g, '&')
+        .replace(/&nbsp;/g, ' ')
+        .replace(/^[\s,;:—–-]+/, '')
+        .replace(/^([^—]{0,40})—\s*/, (all, place) => (place.trim() ? `${place.trim()}: ` : '')),
+      200
+    );
+    markers.push({ type: 'see', name, description, lat, lon, highlight: true });
+  }
+  return markers;
+};
+
+/** Region pages carry a status template such as {{usableregion}} or {{outlineregion}}. */
+const isRegionArticle = (wikitext) => /\{\{\s*\w*region\s*[|}]/i.test(wikitext);
+
+/** Top-level sub-regions from a {{Regionlist}} (regionNname=[[North Goa]]). */
+const regionNames = (wikitext) => [...wikitext.matchAll(/region\d+name\s*=\s*\[\[([^\]|#]+)/gi)]
+  .map((match) => match[1].trim());
+
+/**
+ * Merge listings from several towns round-robin, so one large town can't
+ * crowd out the others (e.g. Panaji vs. Goa's beach towns).
+ */
+const interleave = (lists) => {
+  const result = [];
+  const longest = Math.max(0, ...lists.map((list) => list.length));
+  for (let i = 0; i < longest; i++) {
+    for (const list of lists) if (list[i]) result.push(list[i]);
+  }
+  return result;
+};
+
+const mapLimited = async (items, limit, fn) => {
+  const results = [];
+  for (let i = 0; i < items.length; i += limit) {
+    results.push(...await Promise.allSettled(items.slice(i, i + limit).map(fn)));
+  }
+  return results;
 };
 
 // ---------------------------------------------------------------------------
@@ -165,20 +229,55 @@ const fetchGuide = async (destination) => {
   const article = await fetchWikitext(destination);
   if (!article) return null;
 
-  let listings = listingsFrom(article.wikitext);
+  const ownListings = listingsFrom(article.wikitext);
+  const highlights = destinationMarkers(article.wikitext);
   const guides = [article.title];
+  let townLists = [];
 
-  if (listings.length < MIN_USEFUL_LISTINGS) {
-    const cities = regionCityLinks(article.wikitext);
-    const results = await Promise.allSettled(cities.map(fetchWikitext));
-    for (const result of results) {
-      if (result.status === 'fulfilled' && result.value) {
-        listings = listings.concat(listingsFrom(result.value.wikitext).map((l) => ({ ...l, region: result.value.title })));
-        guides.push(result.value.title);
+  if (ownListings.length < MIN_USEFUL_LISTINGS || isRegionArticle(article.wikitext)) {
+    // Region: its main towns, plus the towns of its top sub-regions
+    const seen = new Set([article.title.toLowerCase()]);
+    const towns = [];
+    const addTown = (title) => {
+      const key = title.toLowerCase();
+      if (!seen.has(key) && towns.length < MAX_GUIDES - 1) {
+        seen.add(key);
+        towns.push(title);
       }
+    };
+    // The region's own major cities first; its sub-regions contribute highlights
+    regionCityLinks(article.wikitext, { highlightsFirst: false }).slice(0, 3).forEach(addTown);
+
+    const subRegions = regionNames(article.wikitext).slice(0, 3).filter((title) => !seen.has(title.toLowerCase()));
+    const subResults = await mapLimited(subRegions, FETCH_CONCURRENCY, fetchWikitext);
+    for (const result of subResults) {
+      if (result.status !== 'fulfilled' || !result.value) continue;
+      seen.add(result.value.title.toLowerCase());
+      guides.push(result.value.title);
+      townLists.push(listingsFrom(result.value.wikitext).map((l) => ({ ...l, region: result.value.title })));
+      highlights.push(...destinationMarkers(result.value.wikitext).map((l) => ({ ...l, region: result.value.title })));
+      // Up to 3 towns per sub-region that aren't already included
+      let added = 0;
+      for (const title of regionCityLinks(result.value.wikitext)) {
+        if (added >= 3) break;
+        const before = towns.length;
+        addTown(title);
+        if (towns.length > before) added++;
+      }
+    }
+
+    const townResults = await mapLimited(towns, FETCH_CONCURRENCY, fetchWikitext);
+    for (const result of townResults) {
+      if (result.status !== 'fulfilled' || !result.value) continue;
+      guides.push(result.value.title);
+      townLists.push(listingsFrom(result.value.wikitext).map((l) => ({ ...l, region: result.value.title })));
     }
   }
 
+  // Highlights (beaches, parks...) and the destination's own listings first,
+  // then towns interleaved
+  const uniqueHighlights = highlights.filter((h, i) => highlights.findIndex((o) => o.name === h.name) === i);
+  const listings = [...uniqueHighlights, ...ownListings, ...interleave(townLists.filter((list) => list.length))];
   const sections = categorise(listings, article.title);
   logger.info('Wikivoyage guide loaded', {
     destination,
@@ -191,8 +290,9 @@ const fetchGuide = async (destination) => {
   return {
     title: article.title,
     url: `https://en.wikivoyage.org/wiki/${encodeURIComponent(article.title.replace(/ /g, '_'))}`,
+    towns: guides.slice(1),
     ...sections
   };
 };
 
-module.exports = { fetchGuide, extractTemplates, splitArgs, plain, parseInrPrice, regionCityLinks, toListing };
+module.exports = { fetchGuide, destinationMarkers, extractTemplates, splitArgs, plain, parseInrPrice, regionCityLinks, regionNames, isRegionArticle, interleave, toListing };

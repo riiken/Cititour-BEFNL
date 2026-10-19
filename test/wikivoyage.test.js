@@ -36,8 +36,17 @@ describe('Wikivoyage parsing', () => {
     expect(plain("'''Bold''' [[Target|text]] <ref>x</ref>")).toBe('Bold text');
   });
 
+  it('turns "Other destinations" markers into highlights with coordinates', () => {
+    const { destinationMarkers } = require('../services/wikivoyageService');
+    const region = '==Other destinations==\n* {{marker|type=go|zoom=15\n| name=[[Anjuna]]\n|lat=15.58092 |long=73.74484\n}} &mdash; a town in Goa with Anjuna Beach\n==Understand==';
+    expect(destinationMarkers(region)).toEqual([
+      expect.objectContaining({ name: 'Anjuna', lat: 15.58092, lon: 73.74484, description: 'a town in Goa with Anjuna Beach' })
+    ]);
+  });
+
   it('finds sub-destinations of region articles', () => {
     const region = '==Cities==\n* [[Panaji]]\n* [[Margao|Madgaon]]\n==Other destinations==\n* [[Calangute]]\n==Understand==\n[[Not this]]';
-    expect(regionCityLinks(region)).toEqual(['Panaji', 'Margao', 'Calangute']);
+    expect(regionCityLinks(region)).toEqual(['Calangute', 'Panaji', 'Margao']);
+    expect(regionCityLinks(region, { highlightsFirst: false })).toEqual(['Panaji', 'Calangute', 'Margao']);
   });
 });

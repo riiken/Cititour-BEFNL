@@ -25,8 +25,9 @@ const citySchema = new mongoose.Schema({
   attractions: { type: [placeSchema], default: [] },
   hotels: { type: [placeSchema], default: [] },
   restaurants: { type: [placeSchema], default: [] },
-  guide: { title: String, url: String },
-  attractionsFetchedAt: { type: Date }
+  guide: { title: String, url: String, towns: [String] },
+  attractionsFetchedAt: { type: Date },
+  placesVersion: { type: Number }
 }, { timestamps: true });
 
 module.exports = mongoose.model('City', citySchema);

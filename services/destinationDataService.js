@@ -12,6 +12,8 @@ const { fetchGuide } = require('./wikivoyageService');
 
 const GEOCODE_MAX_AGE_MS = 180 * 24 * 60 * 60 * 1000;
 const ATTRACTIONS_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+// Bump when the way places are gathered changes, so cached cities refresh
+const PLACES_VERSION = 3;
 const WIKI_RADIUS_M = 10000; // API maximum
 const MAX_ATTRACTIONS = 80;
 
@@ -180,10 +182,10 @@ const fetchPlaces = async (city, query) => {
   }
 
   return {
-    attractions: attractions.slice(0, MAX_ATTRACTIONS),
+    attractions: attractions.slice(0, guide && guide.towns && guide.towns.length > 2 ? MAX_ATTRACTIONS * 1.5 : MAX_ATTRACTIONS),
     hotels: guide ? guide.hotels.map(fromGuide).slice(0, 40) : [],
     restaurants: guide ? guide.restaurants.map(fromGuide).slice(0, 40) : [],
-    guide: guide ? { title: guide.title, url: guide.url } : undefined
+    guide: guide ? { title: guide.title, url: guide.url, towns: guide.towns || [] } : undefined
   };
 };
 
@@ -209,13 +211,13 @@ const getDestination = async (query) => {
     );
   }
 
-  const placesFresh = city.attractionsFetchedAt &&
+  const placesFresh = city.placesVersion === PLACES_VERSION && city.attractionsFetchedAt &&
     Date.now() - city.attractionsFetchedAt.getTime() < ATTRACTIONS_MAX_AGE_MS &&
     city.attractions.length > 0;
   if (!placesFresh) {
     const places = await fetchPlaces(city, query);
     if (places.attractions.length || places.hotels.length) {
-      Object.assign(city, places, { attractionsFetchedAt: new Date() });
+      Object.assign(city, places, { attractionsFetchedAt: new Date(), placesVersion: PLACES_VERSION });
       await city.save();
     }
   }
