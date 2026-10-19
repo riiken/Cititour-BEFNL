@@ -1,7 +1,9 @@
 const User = require('../model/User');
 const { generateTokenPair, verifyRefreshToken } = require('../config/jwt');
 const { ApiError } = require('../middleware/errorHandler');
+const crypto = require('crypto');
 const logger = require('../config/logger');
+const { sendMailSafe, appUrl } = require('../config/mailer');
 
 /**
  * Register a new user
@@ -383,7 +385,81 @@ const getUsage = async (req, res, next) => {
   }
 };
 
+// ---------------------------------------------------------------- password reset
+
+const RESET_TTL_MS = 30 * 60 * 1000;
+const GENERIC_RESET_MESSAGE = 'If an account exists for that email, we have sent a link to reset the password. It expires in 30 minutes.';
+
+/**
+ * Email a single-use reset link. Always responds the same way so the
+ * endpoint can't be used to discover which emails are registered.
+ * POST /api/auth/forgot-password
+ */
+const forgotPassword = async (req, res, next) => {
+  try {
+    const email = String(req.body.email).toLowerCase().trim();
+    const user = await User.findOne({ email, isActive: true });
+
+    if (user) {
+      const token = crypto.randomBytes(32).toString('hex');
+      user.passwordResetToken = User.hashToken(token);
+      user.passwordResetExpires = new Date(Date.now() + RESET_TTL_MS);
+      await user.save();
+
+      const link = `${appUrl()}/reset-password?token=${token}&email=${encodeURIComponent(email)}`;
+      sendMailSafe({
+        to: user.email,
+        subject: 'Reset your CitiTour password',
+        text: `Hi ${user.name},\n\nUse this link to set a new password (valid for 30 minutes):\n${link}\n\nIf you didn't ask for this, you can ignore this email; your password won't change.\n\nTeam CitiTour`,
+        html: `<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto">
+          <h2 style="color:#86B817">CitiTour</h2>
+          <p>Hi ${String(user.name).replace(/[<>&"]/g, '')},</p>
+          <p>Use the button below to set a new password. The link is valid for 30 minutes and works once.</p>
+          <p><a href="${link}" style="background:#86B817;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none">Set a new password</a></p>
+          <p style="color:#868e96;font-size:13px">If you didn't ask for this, ignore this email. Your password won't change.</p></div>`
+      });
+      logger.info('Password reset requested', { userId: String(user._id) });
+    }
+
+    res.status(200).json({ success: true, message: GENERIC_RESET_MESSAGE });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Set a new password with a valid reset token. Signs the user out everywhere.
+ * POST /api/auth/reset-password
+ */
+const resetPassword = async (req, res, next) => {
+  try {
+    const email = String(req.body.email).toLowerCase().trim();
+    const user = await User.findOne({
+      email,
+      passwordResetToken: User.hashToken(req.body.token),
+      passwordResetExpires: { $gt: new Date() }
+    }).select('+passwordResetToken +passwordResetExpires');
+
+    if (!user) {
+      throw new ApiError(400, 'This reset link is invalid or has expired. Please request a new one.');
+    }
+
+    user.password = req.body.password;
+    user.passwordResetToken = undefined;
+    user.passwordResetExpires = undefined;
+    user.refreshToken = undefined; // sign out other sessions
+    await user.save();
+
+    logger.info('Password reset completed', { userId: String(user._id) });
+    res.status(200).json({ success: true, message: 'Your password has been changed. Please log in.' });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
+  forgotPassword,
+  resetPassword,
   register,
   login,
   logout,

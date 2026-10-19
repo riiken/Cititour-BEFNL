@@ -10,8 +10,12 @@ const {
   getProfile,
   updateProfile,
   changePassword,
-  getUsage
+  getUsage,
+  forgotPassword,
+  resetPassword
 } = require('../controllers/authController');
+const { body } = require('express-validator');
+const { validateRequest } = require('../middleware/validation');
 
 // Validation middleware
 const {
@@ -26,7 +30,7 @@ const {
 const { authenticate, optionalAuth } = require('../middleware/auth');
 
 // Rate limiters
-const { authLimiter } = require('../middleware/rateLimiter');
+const { authLimiter, strictLimiter } = require('../middleware/rateLimiter');
 
 // ============================================
 // PUBLIC ROUTES (NO AUTHENTICATION REQUIRED)
@@ -63,6 +67,32 @@ router.post('/refresh',
   authLimiter,            // Prevent token refresh spam
   validateRefreshToken,   // Validate refresh token
   refresh                 // Issue new tokens
+);
+
+/**
+ * POST /api/auth/forgot-password
+ * Email a password reset link (same response whether or not the email exists)
+ */
+router.post('/forgot-password',
+  strictLimiter,
+  body('email').trim().isEmail().withMessage('Enter a valid email address').normalizeEmail(),
+  validateRequest,
+  forgotPassword
+);
+
+/**
+ * POST /api/auth/reset-password
+ * Set a new password using the emailed token
+ */
+router.post('/reset-password',
+  authLimiter,
+  body('email').trim().isEmail().normalizeEmail(),
+  body('token').isString().isLength({ min: 64, max: 64 }).isHexadecimal().withMessage('Invalid reset link'),
+  body('password')
+    .isLength({ min: 8, max: 128 }).withMessage('Password must be between 8 and 128 characters')
+    .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/).withMessage('Password must contain at least one uppercase letter, one lowercase letter, and one number'),
+  validateRequest,
+  resetPassword
 );
 
 // ============================================

@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const logger = require('./logger');
 
@@ -30,6 +31,7 @@ const generateAccessToken = (payload) => {
       },
       process.env.JWT_SECRET,
       {
+        jwtid: crypto.randomUUID(), // unique even when issued in the same second
         expiresIn: '15m', // 15 minutes
         issuer: 'cititour-api',
         audience: 'cititour-client'
@@ -58,6 +60,7 @@ const generateRefreshToken = (payload) => {
       },
       process.env.JWT_REFRESH_SECRET,
       {
+        jwtid: crypto.randomUUID(), // unique per token, so rotation/reuse detection is exact
         expiresIn: '7d', // 7 days
         issuer: 'cititour-api',
         audience: 'cititour-client'

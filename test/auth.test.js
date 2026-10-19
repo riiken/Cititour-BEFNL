@@ -27,8 +27,6 @@ describe('auth', () => {
     expect(stored.refreshToken).not.toBe(body.data.refreshToken);
     expect(stored.refreshToken).toBe(User.hashToken(body.data.refreshToken));
 
-    // Ensure a different iat so the rotated token differs
-    await new Promise((resolve) => setTimeout(resolve, 1100));
     const refreshed = await request(app).post('/api/auth/refresh').send({ refreshToken: body.data.refreshToken });
     expect(refreshed.status).toBe(200);
 
