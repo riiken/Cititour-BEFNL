@@ -1,47 +1,96 @@
 const AiResponse = require('../model/aiResponse');
-const { callAiApi } = require('../services/aiService');
+const {
+  callAiApi,
+  attachLinks,
+  AiUnavailableError,
+  TRAVEL_GUIDE_PROMPT_VERSION
+} = require('../services/aiService');
+const { reserveAiGeneration } = require('../services/aiBudget');
+const logger = require('../config/logger');
 
-const handleQuery = async (req, res) => {
+// Cached guides are regenerated after this many days (they are not deleted).
+const GUIDE_MAX_AGE_MS = Number(process.env.AI_GUIDE_CACHE_DAYS || 30) * 24 * 60 * 60 * 1000;
+
+const normalise = (value) => String(value || '').toLowerCase().replace(/\s+/g, ' ').trim();
+
+/**
+ * Optional structured trip details sent by newer clients. All fields are
+ * validated in middleware/validation.js#validateAIQuery.
+ */
+const readContext = (body) => ({
+  destination: body.destination,
+  checkIn: body.checkIn,
+  checkOut: body.checkOut,
+  travellers: body.travellers,
+  budget: body.budget,
+  interests: Array.isArray(body.interests) ? body.interests : undefined
+});
+
+const buildCacheKey = (query, context) => {
+  const parts = [
+    TRAVEL_GUIDE_PROMPT_VERSION,
+    normalise(query),
+    normalise(context.destination),
+    context.checkIn || '',
+    context.checkOut || '',
+    context.travellers || '',
+    normalise(context.budget),
+    (context.interests || []).map(normalise).sort().join(',')
+  ];
+  return parts.join('|');
+};
+
+const handleQuery = async (req, res, next) => {
   const { query } = req.body;
-
-  if (!query) {
-    return res.status(400).json({ error: 'Query is required' });
-  }
+  const context = readContext(req.body);
+  const cacheKey = buildCacheKey(query, context);
 
   try {
-    // Check for existing response in the database
-    let aiResponse = await AiResponse.findOne({ query });
+    let aiResponse = await AiResponse.findOne({ query: cacheKey });
+    const isFresh = aiResponse && Date.now() - new Date(aiResponse.updatedAt).getTime() < GUIDE_MAX_AGE_MS;
 
-    if (!aiResponse) {
-      // If no response found, call the AI API and format the response
-      const guides = await callAiApi(query);
-      
-      // Format the response as needed (e.g., separate fields for budget, travel guide, etc.)
-      const formattedResponse = {
-        budget: guides.budget || 'Not available', // Make sure budget is a string
-        travelGuide: guides.travelGuide || [],    // Ensure it's an array, not a string
-        stayGuide: guides.stayGuide || [],        // Ensure it's an array, not a string
-        foodGuide: guides.foodGuide || [],        // Ensure it's an array, not a string
-      };
-    
-      // Save the formatted response to the database
-      aiResponse = new AiResponse({
-        query,
-        budget: formattedResponse.budget,
-        travelGuide: formattedResponse.travelGuide,
-        stayGuide: formattedResponse.stayGuide,
-        foodGuide: formattedResponse.foodGuide,
-      });
-      
-      await aiResponse.save();
+    if (!isFresh) {
+      const allowed = await reserveAiGeneration();
+      if (!allowed) {
+        if (aiResponse) {
+          // Over budget: serve the stale guide rather than nothing.
+          return res.json({ query, guides: attachLinks(aiResponse.toJSON(), context), stale: true });
+        }
+        throw new AiUnavailableError('Trip planning is busy right now. Please try again in a little while.');
+      }
+
+      // Failures throw and are never cached.
+      const guide = await callAiApi(query, context);
+
+      aiResponse = await AiResponse.findOneAndUpdate(
+        { query: cacheKey },
+        {
+          $set: {
+            originalQuery: query,
+            promptVersion: TRAVEL_GUIDE_PROMPT_VERSION,
+            destination: guide.destination,
+            budget: guide.budget,
+            travelGuide: guide.travelGuide,
+            stayGuide: guide.stayGuide,
+            foodGuide: guide.foodGuide
+          }
+        },
+        { upsert: true, new: true, setDefaultsOnInsert: true }
+      );
     }
-    
-    // Return the response
-    return res.json({ query, guides: aiResponse });
+
+    return res.json({ query, guides: attachLinks(aiResponse.toJSON(), context) });
   } catch (error) {
-    console.error('Error handling query:', error.message);
-    return res.status(500).json({ error: 'Internal Server Error' });
+    if (error instanceof AiUnavailableError) {
+      return res.status(503).json({
+        success: false,
+        message: error.message,
+        retryAfterSeconds: 60
+      });
+    }
+    logger.error('Error handling AI query', { error: error.message });
+    return next(error);
   }
 };
 
-module.exports = { handleQuery };
+module.exports = { handleQuery, buildCacheKey };

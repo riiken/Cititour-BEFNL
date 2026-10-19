@@ -2,7 +2,8 @@ const mongoose = require('mongoose');
 const { v4: uuidv4 } = require('uuid');
 
 const HotelSchema = new mongoose.Schema({
-  hotelId: { type: Number, required: true },
+  // Provider IDs are numeric for most hotels; a UUID is generated when absent.
+  hotelId: { type: String, required: true },
   name: { type: String, required: true },
   rating: { type: mongoose.Schema.Types.Mixed },
   reviewsCount: { type: Number },
@@ -95,6 +96,8 @@ const PlaceSchema = new mongoose.Schema({
     tours: [TourSchema],
     // vacationRentals: [VacationRentalSchema],
     createdAt: { type: Date, default: Date.now },
+    // Last successful provider refresh (legacy documents only have createdAt)
+    refreshedAt: { type: Date },
   });
   
 module.exports = mongoose.model('SuggestedHotel', PlaceSchema);
