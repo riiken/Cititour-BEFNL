@@ -7,7 +7,7 @@ services:
     runtime: node
     region: singapore             # closest Render region to India
     plan: starter                 # free plan sleeps after 15 min idle (30-60 s first load); starter stays awake
-    branch: rewire
+    branch: master
     buildCommand: npm ci --omit=dev
     startCommand: node server.js
     healthCheckPath: /ready

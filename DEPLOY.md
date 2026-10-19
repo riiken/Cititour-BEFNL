@@ -1,7 +1,7 @@
 # Deploying CitiTour
 
 About 20–30 minutes. You need three free accounts: **MongoDB Atlas**, **Render** and **GitHub** (already set up).
-Both repos deploy from the `rewire` branch.
+Production deploys from each repo's default branch: `master` (API) and `main` (web app). `rewire` is the working branch.
 
 ```
 Browser / Android app ──► cititour (Render static site, Angular)
@@ -35,7 +35,7 @@ Browser / Android app ──► cititour (Render static site, Angular)
 ## 2. API: Render web service (≈ 8 min)
 
 1. <https://dashboard.render.com> → **New** → **Blueprint** → connect GitHub → choose **riiken/Cititour-BEFNL**.
-   Render reads `render.yaml` and proposes the `cititour-befnl` service (region Singapore, branch `rewire`).
+   Render reads `render.yaml` and proposes the `cititour-befnl` service (region Singapore, branch `master`).
 2. Fill in the values it asks for:
 
    | Setting | Value |
@@ -58,7 +58,7 @@ Browser / Android app ──► cititour (Render static site, Angular)
 
 ## 3. Web app: Render static site (≈ 5 min)
 
-1. **New** → **Blueprint** → choose **riiken/CitiTour** → apply (service `cititour`, branch `rewire`).
+1. **New** → **Blueprint** → choose **riiken/CitiTour** → apply (service `cititour`, branch `main`).
 2. When the build finishes, open `https://cititour.onrender.com`.
    The app is already configured to call `https://cititour-befnl.onrender.com` (`src/app/environment.prod.ts`).
    If you rename the API service, update that file.
@@ -91,4 +91,4 @@ Affiliate links and ads start earning as soon as the IDs are set; no redeploy of
 - **Logs:** Render → service → *Logs* (JSON lines; no passwords or request bodies are logged).
 - **AI spend:** capped at `AI_DAILY_GENERATION_LIMIT` plans/day; set `AI_ENABLED=false` to switch AI off instantly (plans still work without AI).
 - **Revenue report:** `npm run stats -- 30` (clicks by partner, enquiries, top destinations).
-- **Deploys:** every push to `rewire` redeploys automatically; GitHub Actions runs the backend tests first.
+- **Deploys:** every push to `master` (API) or `main` (web app) redeploys automatically; GitHub Actions runs the backend tests first.
