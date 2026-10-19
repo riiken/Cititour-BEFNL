@@ -45,11 +45,13 @@ const sendMailSafe = async ({ to, subject, text, html, replyTo }) => {
 };
 
 /** Public web app URL for links in emails. */
-const appUrl = () => (
-  process.env.NODE_ENV === 'production'
+// Links in emails point at the first origin when several are configured
+const appUrl = () => {
+  const configured = process.env.NODE_ENV === 'production'
     ? process.env.FRONTEND_URL_PROD || process.env.APP_URL
-    : process.env.FRONTEND_URL || 'http://localhost:4200'
-) || 'https://cititour.onrender.com';
+    : process.env.FRONTEND_URL || 'http://localhost:4200';
+  return (configured || 'https://cititour.onrender.com').split(',')[0].trim().replace(/\/$/, '');
+};
 
 const adminEmails = () => String(process.env.ADMIN_EMAILS || '')
   .split(',').map((email) => email.trim()).filter(Boolean);

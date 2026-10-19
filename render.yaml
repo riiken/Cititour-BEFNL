@@ -27,7 +27,7 @@ services:
       - key: ADMIN_EMAILS
         sync: false
       - key: FRONTEND_URL_PROD
-        sync: false               # e.g. https://cititour.onrender.com or your domain
+        sync: false               # e.g. https://cititour.aionboard.net (comma-separate several)
       - key: APP_URL
         sync: false               # same as FRONTEND_URL_PROD; identifies the app to Wikipedia/OSM
       - key: CONTACT_EMAIL

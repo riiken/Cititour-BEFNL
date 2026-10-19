@@ -29,9 +29,12 @@ app.set('trust proxy', Number(process.env.TRUST_PROXY_HOPS || 1));
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 
 // CORS Configuration - Properly restrict origins
+// FRONTEND_URL / FRONTEND_URL_PROD may list several origins, comma-separated
+// (e.g. a custom domain plus the onrender.com address)
+const originList = (value) => (value || '').split(',').map((o) => o.trim().replace(/\/$/, ''));
 const allowedOrigins = [
-  process.env.FRONTEND_URL,
-  process.env.FRONTEND_URL_PROD,
+  ...originList(process.env.FRONTEND_URL),
+  ...originList(process.env.FRONTEND_URL_PROD),
   'http://localhost:4200',
   'http://localhost:4000', // For SSR server
   'https://cititour.onrender.com'
