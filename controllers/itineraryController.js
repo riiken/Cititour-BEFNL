@@ -25,6 +25,22 @@ const buildCacheKey = (request) => [
   (request.interests || []).map(normaliseKey).sort().join(',')
 ].join('|');
 
+/** A private copy of a plan for a user (their own share link, editable). */
+const copyForUser = async (source, userId) => {
+  const data = source.toObject();
+  delete data._id;
+  delete data.__v;
+  delete data.createdAt;
+  delete data.updatedAt;
+  return Itinerary.create({
+    ...data,
+    publicId: newPublicId(),
+    userId,
+    views: 0,
+    copiedFrom: source.publicId
+  });
+};
+
 const snapshot = (candidate) => {
   const { id, zone, ...place } = candidate;
   return place;
@@ -34,7 +50,7 @@ const snapshot = (candidate) => {
  * Attach maps/booking links at response time (affiliate settings always
  * current; nothing link-related is stored).
  */
-const present = (itinerary) => {
+const present = (itinerary, viewer) => {
   const data = typeof itinerary.toJSON === 'function' ? itinerary.toJSON() : itinerary;
   const { request } = data;
   const city = (data.destination && data.destination.name) || request.destination;
@@ -100,7 +116,10 @@ const present = (itinerary) => {
     sources: data.sources,
     guide: data.guide,
     generatedBy: data.generatedBy && data.generatedBy.method,
-    createdAt: data.createdAt
+    canEdit: Boolean(viewer && data.userId && String(data.userId) === String(viewer.id)),
+    edited: Boolean(data.edited),
+    createdAt: data.createdAt,
+    updatedAt: data.updatedAt
   };
 };
 
@@ -116,12 +135,17 @@ const createItinerary = async (req, res, next) => {
   const cacheKey = buildCacheKey(request);
 
   try {
+    // Reuse a recent untouched anonymous plan (no AI cost). Logged-in users
+    // get their own copy so later edits stay private.
     const recent = await Itinerary.findOne({
       cacheKey,
+      userId: null,
+      edited: { $ne: true },
       createdAt: { $gte: new Date(Date.now() - REUSE_WINDOW_MS) }
     }).sort({ createdAt: -1 });
     if (recent) {
-      return res.status(200).json({ success: true, data: present(recent), reused: true });
+      const plan = req.user ? await copyForUser(recent, req.user.id) : recent;
+      return res.status(200).json({ success: true, data: present(plan, req.user), reused: true });
     }
 
     const city = await getDestination(request.destination);
@@ -209,7 +233,7 @@ const createItinerary = async (req, res, next) => {
       stays: itinerary.stays.length
     });
 
-    return res.status(201).json({ success: true, data: present(itinerary) });
+    return res.status(201).json({ success: true, data: present(itinerary, req.user) });
   } catch (error) {
     return next(error);
   }
@@ -225,7 +249,7 @@ const getItinerary = async (req, res, next) => {
     if (!itinerary) {
       return res.status(404).json({ success: false, message: 'This trip plan was not found.' });
     }
-    return res.json({ success: true, data: present(itinerary) });
+    return res.json({ success: true, data: present(itinerary, req.user) });
   } catch (error) {
     return next(error);
   }
@@ -242,4 +266,4 @@ const recordEvent = async (req, res) => {
   return res.status(204).end();
 };
 
-module.exports = { createItinerary, getItinerary, recordEvent, present, buildCacheKey };
+module.exports = { createItinerary, getItinerary, recordEvent, present, buildCacheKey, copyForUser, newPublicId, snapshot };

@@ -1,0 +1,72 @@
+# Render Blueprint for the CitiTour API.
+# Render dashboard -> New -> Blueprint -> pick this repo. Values marked
+# `sync: false` are asked for during setup (secrets are never stored here).
+services:
+  - type: web
+    name: cititour-befnl          # gives https://cititour-befnl.onrender.com (used by the web app)
+    runtime: node
+    region: singapore             # closest Render region to India
+    plan: starter                 # free plan sleeps after 15 min idle (30-60 s first load); starter stays awake
+    branch: rewire
+    buildCommand: npm ci --omit=dev
+    startCommand: node server.js
+    healthCheckPath: /ready
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: TRUST_PROXY_HOPS
+        value: "1"
+      # --- required
+      - key: MONGODB_URI
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: ADMIN_EMAILS
+        sync: false
+      - key: FRONTEND_URL_PROD
+        sync: false               # e.g. https://cititour.onrender.com or your domain
+      - key: APP_URL
+        sync: false               # same as FRONTEND_URL_PROD; identifies the app to Wikipedia/OSM
+      - key: CONTACT_EMAIL
+        sync: false
+      # --- AI
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-flash-lite-latest
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GROQ_MODEL
+        value: openai/gpt-oss-120b
+      - key: AI_DAILY_GENERATION_LIMIT
+        value: "500"
+      # --- revenue (links work without these, but earn nothing)
+      - key: BOOKING_AFFILIATE_ID
+        sync: false
+      - key: BOOKING_AFFILIATE_LABEL
+        value: cititour
+      - key: GYG_PARTNER_ID
+        sync: false
+      # --- email (contact form + listing notifications)
+      - key: EMAIL_HOST
+        sync: false
+      - key: EMAIL_PORT
+        value: "587"
+      - key: EMAIL_USER
+        sync: false
+      - key: EMAIL_PASS
+        sync: false
+      - key: RECIPIENT_EMAIL
+        sync: false
+      # --- optional data sources
+      - key: OPENWEATHER_API_KEY
+        sync: false
+      - key: UNSPLASH_API_KEY
+        sync: false
+      - key: RAPIDAPI_KEY
+        sync: false
+      - key: TRIPADVISOR_API_URL
+        value: https://real-time-tripadvisor-scraper-api.p.rapidapi.com

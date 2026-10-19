@@ -1,11 +1,12 @@
 const express = require('express');
 const rateLimit = require('express-rate-limit');
-const { body, param } = require('express-validator');
-const { optionalAuth, trackUsage } = require('../middleware/auth');
+const { body, param, query } = require('express-validator');
+const { authenticate, optionalAuth, trackUsage } = require('../middleware/auth');
 const { aiLimiter } = require('../middleware/rateLimiter');
 const { validateRequest } = require('../middleware/validation');
 const { createItinerary, getItinerary, recordEvent } = require('../controllers/itineraryController');
 const listingRoutes = require('./listingRoutes');
+const tripEdit = require('../controllers/tripEditController');
 
 const router = express.Router();
 
@@ -66,10 +67,35 @@ router.post('/itineraries',
  * Public, shareable read of a plan by its unguessable id.
  */
 router.get('/itineraries/:id',
+  optionalAuth,
   param('id').isString().isLength({ min: 8, max: 20 }).matches(/^[A-Za-z0-9_-]+$/),
   validateRequest,
   getItinerary
 );
+
+// ---------------------------------------------------------------- my trips & editing
+const tripId = param('id').isString().isLength({ min: 8, max: 20 }).matches(/^[A-Za-z0-9_-]+$/);
+const SLOTS = ['morning', 'lunch', 'afternoon', 'evening', 'dinner'];
+const editLimiter = rateLimit({ windowMs: 60 * 1000, max: 60, standardHeaders: true, legacyHeaders: false });
+
+router.get('/me/trips', authenticate, tripEdit.myTrips);
+router.post('/itineraries/:id/copy', authenticate, tripId, validateRequest, tripEdit.saveCopy);
+router.delete('/itineraries/:id', authenticate, tripId, validateRequest, tripEdit.deleteTrip);
+router.get('/itineraries/:id/alternatives', authenticate, tripId,
+  query('group').isIn(['activity', 'meal', 'stay']),
+  query('day').optional().isInt({ min: 1, max: 20 }),
+  validateRequest, tripEdit.alternatives);
+router.patch('/itineraries/:id', authenticate, editLimiter, tripId,
+  body('op').isIn(['remove', 'move', 'add', 'replace', 'stay_remove', 'stay_add', 'title']),
+  body('day').optional().isInt({ min: 1, max: 20 }).toInt(),
+  body('toDay').optional().isInt({ min: 1, max: 20 }).toInt(),
+  body('index').optional().isInt({ min: 0, max: 50 }).toInt(),
+  body('slot').optional().isIn(SLOTS),
+  body('place').optional().isObject(),
+  body('place.kind').optional().isIn(['attraction', 'tour', 'restaurant', 'hotel', 'area']),
+  body('place.name').optional().isString().isLength({ min: 1, max: 160 }),
+  body('title').optional().isString().trim().isLength({ min: 2, max: 100 }),
+  validateRequest, tripEdit.updateTrip);
 
 /**
  * POST /api/v1/events

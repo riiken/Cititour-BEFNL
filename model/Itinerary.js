@@ -84,7 +84,10 @@ const itinerarySchema = new mongoose.Schema({
   sources: [String],
   guide: { title: String, url: String },
   generatedBy: { method: String, provider: String, promptVersion: String },
-  views: { type: Number, default: 0 }
+  views: { type: Number, default: 0 },
+  // Personal copies: edited plans are never reused for other travellers
+  edited: { type: Boolean, default: false },
+  copiedFrom: { type: String }
 }, { timestamps: true });
 
 module.exports = mongoose.model('Itinerary', itinerarySchema);
