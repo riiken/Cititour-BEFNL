@@ -24,16 +24,14 @@ const register = async (req, res, next) => {
       email: email.toLowerCase().trim(),
       password,
       tier: 'free',
-      isActive: true
+      isActive: true,
+      termsAcceptedAt: new Date(),
+      termsVersion: process.env.TERMS_VERSION || '2026-10-18'
     });
 
-    await user.save();
-
-    // Generate tokens
+    // Generate tokens (the id is assigned on construction) and save once
     const { accessToken, refreshToken } = generateTokenPair(user);
-
-    // Save refresh token to user
-    user.refreshToken = refreshToken;
+    user.refreshToken = User.hashToken(refreshToken);
     await user.save();
 
     logger.info('New user registered:', {
@@ -93,7 +91,7 @@ const login = async (req, res, next) => {
     const { accessToken, refreshToken } = generateTokenPair(user);
 
     // Update refresh token in database
-    user.refreshToken = refreshToken;
+    user.refreshToken = User.hashToken(refreshToken);
     user.lastLogin = new Date();
     await user.save();
 
@@ -125,24 +123,20 @@ const login = async (req, res, next) => {
  */
 const logout = async (req, res, next) => {
   try {
-    // req.user is set by auth middleware
-    const userId = req.user.id;
+    // Works with a valid access token, or with just the refresh token (so an
+    // expired session can still be revoked)
+    let userId = req.user && req.user.id;
+    if (!userId && typeof req.body.refreshToken === 'string') {
+      const user = await User.findByRefreshToken(req.body.refreshToken);
+      userId = user && user._id;
+    }
 
-    // Remove refresh token from database
-    await User.findByIdAndUpdate(userId, {
-      $unset: { refreshToken: 1 }
-    });
+    if (userId) {
+      await User.findByIdAndUpdate(userId, { $unset: { refreshToken: 1 } });
+      logger.info('User logged out', { userId: String(userId) });
+    }
 
-    logger.info('User logged out:', {
-      userId: userId,
-      email: req.user.email
-    });
-
-    res.status(200).json({
-      success: true,
-      message: 'Logout successful'
-    });
-
+    res.status(200).json({ success: true, message: 'Logout successful' });
   } catch (error) {
     next(error);
   }
@@ -188,7 +182,7 @@ const refresh = async (req, res, next) => {
     const tokens = generateTokenPair(user);
 
     // Update refresh token in database
-    user.refreshToken = tokens.refreshToken;
+    user.refreshToken = User.hashToken(tokens.refreshToken);
     await user.save();
 
     logger.info('Tokens refreshed:', {
@@ -309,11 +303,9 @@ const changePassword = async (req, res, next) => {
       throw new ApiError(400, 'New password must be at least 8 characters');
     }
 
-    // Update password (will be hashed by pre-save hook)
+    // Update password (hashed by pre-save hook) and invalidate the refresh
+    // token, forcing re-login on all devices
     user.password = newPassword;
-    await user.save();
-
-    // Invalidate all refresh tokens (force re-login on all devices)
     user.refreshToken = undefined;
     await user.save();
 
@@ -363,12 +355,16 @@ const getUsage = async (req, res, next) => {
           },
           search: {
             total: user.usage.searchRequestCount,
+            today: user.usage.searchRequestsToday,
+            window: searchLimit.window,
             limit: searchLimit.limit,
             remaining: searchLimit.remaining,
             lastRequest: user.usage.lastSearchRequestDate
           },
           email: {
             total: user.usage.emailRequestCount,
+            today: user.usage.emailRequestsToday,
+            window: emailLimit.window,
             limit: emailLimit.limit,
             remaining: emailLimit.remaining,
             lastRequest: user.usage.lastEmailRequestDate

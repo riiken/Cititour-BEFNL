@@ -24,7 +24,7 @@ const getGroqClient = () => {
  * @param {string} model - Model to use (default: llama-3.3-70b-versatile)
  * @returns {Promise<string>} AI-generated response
  */
-const generateGroqRecommendation = async (prompt, model = "llama-3.3-70b-versatile") => {
+const generateGroqRecommendation = async (prompt, model = process.env.GROQ_MODEL || "openai/gpt-oss-120b", { json = false } = {}) => {
   try {
     const groqClient = getGroqClient();
     const chatCompletion = await groqClient.chat.completions.create({
@@ -42,7 +42,8 @@ const generateGroqRecommendation = async (prompt, model = "llama-3.3-70b-versati
       temperature: 0.7,
       max_tokens: 4096,
       top_p: 1,
-      stream: false
+      stream: false,
+      ...(json && { response_format: { type: "json_object" } })
     });
 
     const response = chatCompletion.choices[0]?.message?.content || "";
@@ -142,7 +143,7 @@ Please provide a detailed, structured response in JSON format with these section
 IMPORTANT: Return ONLY valid JSON, no markdown formatting, no code blocks, no additional text.`;
 
   try {
-    const response = await generateGroqRecommendation(prompt, "llama-3.3-70b-versatile");
+    const response = await generateGroqRecommendation(prompt, undefined, { json: true });
 
     // Clean up response - remove markdown code blocks if present
     let text = response.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();

@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcrypt');
+const crypto = require('crypto');
 
 const userSchema = new mongoose.Schema({
   // Basic Information
@@ -28,6 +29,13 @@ const userSchema = new mongoose.Schema({
     required: [true, 'Password is required'],
     minlength: [8, 'Password must be at least 8 characters'],
     select: false // Don't return password in queries by default
+  },
+
+  // Access role. Admins can also be granted via the ADMIN_EMAILS env var.
+  role: {
+    type: String,
+    enum: ['user', 'admin'],
+    default: 'user'
   },
 
   // Subscription & Usage Tracking
@@ -66,6 +74,14 @@ const userSchema = new mongoose.Schema({
       type: Date,
       default: null
     },
+    searchRequestsToday: {
+      type: Number,
+      default: 0
+    },
+    searchDayStart: {
+      type: Date,
+      default: null
+    },
 
     // Email Request Tracking
     emailRequestCount: {
@@ -73,6 +89,14 @@ const userSchema = new mongoose.Schema({
       default: 0
     },
     lastEmailRequestDate: {
+      type: Date,
+      default: null
+    },
+    emailRequestsToday: {
+      type: Number,
+      default: 0
+    },
+    emailDayStart: {
       type: Date,
       default: null
     }
@@ -104,6 +128,7 @@ const userSchema = new mongoose.Schema({
   },
 
   // Authentication
+  // SHA-256 hash of the current refresh token (never the token itself)
   refreshToken: {
     type: String,
     select: false // Don't return refresh token in queries
@@ -129,6 +154,16 @@ const userSchema = new mongoose.Schema({
     select: false
   },
 
+  // Consent record
+  termsAcceptedAt: {
+    type: Date,
+    default: null
+  },
+  termsVersion: {
+    type: String,
+    default: null
+  },
+
   // Account Status
   isActive: {
     type: Boolean,
@@ -147,8 +182,8 @@ const userSchema = new mongoose.Schema({
 // INDEXES FOR PERFORMANCE
 // ============================================
 
-userSchema.index({ email: 1 });
 userSchema.index({ tier: 1 });
+userSchema.index({ refreshToken: 1 }, { sparse: true });
 userSchema.index({ 'subscription.status': 1 });
 
 // ============================================
@@ -187,52 +222,61 @@ userSchema.methods.comparePassword = async function(candidatePassword) {
 };
 
 /**
+ * Per-tier limits. AI is per rolling hour; search and email per UTC day.
+ * Paid tiers have high but finite AI limits: every AI request has a real cost.
+ */
+const TIER_LIMITS = {
+  free: { ai: 20, search: 100, email: 5 },
+  pro: { ai: 100, search: Infinity, email: 50 },
+  premium: { ai: 300, search: Infinity, email: Infinity }
+};
+
+const HOUR_MS = 60 * 60 * 1000;
+
+const startOfUtcDay = (date) => new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+
+/**
+ * Reset expired usage windows (mutates the document; persisted by incrementUsage).
+ */
+userSchema.methods.resetExpiredUsageWindows = function(now = new Date()) {
+  const usage = this.usage;
+  if (!usage.hourlyResetTime || now - usage.hourlyResetTime >= HOUR_MS) {
+    usage.aiRequestsThisHour = 0;
+    usage.hourlyResetTime = now;
+  }
+  const today = startOfUtcDay(now);
+  if (!usage.searchDayStart || usage.searchDayStart < today) {
+    usage.searchRequestsToday = 0;
+    usage.searchDayStart = today;
+  }
+  if (!usage.emailDayStart || usage.emailDayStart < today) {
+    usage.emailRequestsToday = 0;
+    usage.emailDayStart = today;
+  }
+};
+
+/**
  * Check if user has exceeded their tier limits
  * @param {String} requestType - Type of request ('ai', 'search', 'email')
- * @returns {Object} { allowed: Boolean, limit: Number, current: Number }
+ * @returns {Object} { allowed, limit, current, remaining, window }
  */
 userSchema.methods.checkRateLimit = function(requestType = 'ai') {
-  const limits = {
-    free: {
-      ai: 20,
-      search: 50,
-      email: 5
-    },
-    pro: {
-      ai: Infinity,
-      search: Infinity,
-      email: 50
-    },
-    premium: {
-      ai: Infinity,
-      search: Infinity,
-      email: Infinity
-    }
-  };
+  this.resetExpiredUsageWindows();
 
-  const limit = limits[this.tier][requestType];
-  let current = 0;
-
-  // Check if we need to reset hourly counter
-  const now = new Date();
-  if (requestType === 'ai') {
-    if (!this.usage.hourlyResetTime || now - this.usage.hourlyResetTime > 3600000) {
-      // Reset hourly counter
-      this.usage.aiRequestsThisHour = 0;
-      this.usage.hourlyResetTime = now;
-    }
-    current = this.usage.aiRequestsThisHour;
-  } else if (requestType === 'search') {
-    current = this.usage.searchRequestCount;
-  } else if (requestType === 'email') {
-    current = this.usage.emailRequestCount;
-  }
+  const limits = TIER_LIMITS[this.tier] || TIER_LIMITS.free;
+  const limit = limits[requestType];
+  const current = {
+    ai: this.usage.aiRequestsThisHour,
+    search: this.usage.searchRequestsToday,
+    email: this.usage.emailRequestsToday
+  }[requestType] || 0;
 
   return {
     allowed: current < limit,
     limit: limit === Infinity ? 'unlimited' : limit,
     current,
-    remaining: limit === Infinity ? 'unlimited' : Math.max(0, limit - current)
+    remaining: limit === Infinity ? 'unlimited' : Math.max(0, limit - current),
+    window: requestType === 'ai' ? 'hour' : 'day'
   };
 };
 
@@ -242,6 +286,7 @@ userSchema.methods.checkRateLimit = function(requestType = 'ai') {
  */
 userSchema.methods.incrementUsage = async function(requestType = 'ai') {
   const now = new Date();
+  this.resetExpiredUsageWindows(now);
 
   if (requestType === 'ai') {
     this.usage.aiRequestCount += 1;
@@ -249,9 +294,11 @@ userSchema.methods.incrementUsage = async function(requestType = 'ai') {
     this.usage.lastAiRequestDate = now;
   } else if (requestType === 'search') {
     this.usage.searchRequestCount += 1;
+    this.usage.searchRequestsToday += 1;
     this.usage.lastSearchRequestDate = now;
   } else if (requestType === 'email') {
     this.usage.emailRequestCount += 1;
+    this.usage.emailRequestsToday += 1;
     this.usage.lastEmailRequestDate = now;
   }
 
@@ -262,12 +309,25 @@ userSchema.methods.incrementUsage = async function(requestType = 'ai') {
  * Get user profile (without sensitive data)
  * @returns {Object}
  */
+/**
+ * Whether this user has admin access (stored role or ADMIN_EMAILS allow-list).
+ */
+userSchema.methods.isAdmin = function() {
+  if (this.role === 'admin') return true;
+  const admins = String(process.env.ADMIN_EMAILS || '')
+    .split(',')
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean);
+  return admins.includes(String(this.email).toLowerCase());
+};
+
 userSchema.methods.toProfileJSON = function() {
   return {
     id: this._id,
     name: this.name,
     email: this.email,
     tier: this.tier,
+    role: this.isAdmin() ? 'admin' : 'user',
     isEmailVerified: this.isEmailVerified,
     usage: {
       aiRequests: this.usage.aiRequestCount,
@@ -315,8 +375,17 @@ userSchema.statics.findByCredentials = async function(email) {
  * @param {String} refreshToken
  * @returns {Promise<User>}
  */
+userSchema.statics.hashToken = function(token) {
+  return crypto.createHash('sha256').update(String(token)).digest('hex');
+};
+
 userSchema.statics.findByRefreshToken = async function(refreshToken) {
-  return await this.findOne({ refreshToken }).select('+refreshToken');
+  // Tokens issued before hashing was introduced were stored as-is; accept
+  // those until they expire (max 7 days), after which only hashes remain.
+  return await this.findOne({
+    refreshToken: { $in: [this.hashToken(refreshToken), refreshToken] }
+  }).select('+refreshToken');
 };
 
 module.exports = mongoose.model('User', userSchema);
+module.exports.TIER_LIMITS = TIER_LIMITS;

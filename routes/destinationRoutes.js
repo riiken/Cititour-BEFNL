@@ -3,6 +3,7 @@ const router = express.Router();
 const rateLimit = require('express-rate-limit');
 const destinationController = require('../controllers/destinationController');
 const { optionalAuth, trackUsage } = require('../middleware/auth');
+const { validateDestinationName, validateDestinationSearch } = require('../middleware/validation');
 
 /**
  * Rate limiters for destination endpoints
@@ -49,8 +50,9 @@ const externalApiLimiter = rateLimit({
 // GET /api/destinations/search?q=tokyo&limit=5
 router.get('/search',
   optionalAuth,
-  trackUsage('search'),
   searchLimiter,
+  validateDestinationSearch,
+  trackUsage('search'),
   destinationController.searchDestinations
 );
 
@@ -58,8 +60,9 @@ router.get('/search',
 // GET /api/destinations/:name?includeWeather=true&includeImages=true&includeForecast=true&units=metric
 router.get('/:name',
   optionalAuth,
-  trackUsage('search'),
   destinationLimiter,
+  validateDestinationName,
+  trackUsage('search'),
   destinationController.getDestination
 );
 
@@ -67,8 +70,9 @@ router.get('/:name',
 // GET /api/destinations/:name/travel?units=metric
 router.get('/:name/travel',
   optionalAuth,
-  trackUsage('search'),
   destinationLimiter,
+  validateDestinationName,
+  trackUsage('search'),
   destinationController.getTravelPlanningData
 );
 
@@ -76,8 +80,9 @@ router.get('/:name/travel',
 // GET /api/destinations/:name/quick
 router.get('/:name/quick',
   optionalAuth,
-  trackUsage('search'),
   destinationLimiter,
+  validateDestinationName,
+  trackUsage('search'),
   destinationController.getQuickOverview
 );
 
@@ -85,8 +90,9 @@ router.get('/:name/quick',
 // GET /api/destinations/:name/images?count=10
 router.get('/:name/images',
   optionalAuth,
-  trackUsage('search'),
   externalApiLimiter,
+  validateDestinationName,
+  trackUsage('search'),
   destinationController.getDestinationImages
 );
 
@@ -94,8 +100,9 @@ router.get('/:name/images',
 // GET /api/destinations/:name/weather?units=metric
 router.get('/:name/weather',
   optionalAuth,
-  trackUsage('search'),
   externalApiLimiter,
+  validateDestinationName,
+  trackUsage('search'),
   destinationController.getDestinationWeather
 );
 
@@ -103,8 +110,9 @@ router.get('/:name/weather',
 // GET /api/destinations/:name/forecast?units=metric
 router.get('/:name/forecast',
   optionalAuth,
-  trackUsage('search'),
   externalApiLimiter,
+  validateDestinationName,
+  trackUsage('search'),
   destinationController.getDestinationForecast
 );
 
@@ -112,8 +120,9 @@ router.get('/:name/forecast',
 // GET /api/destinations/:name/info
 router.get('/:name/info',
   optionalAuth,
-  trackUsage('search'),
   destinationLimiter,
+  validateDestinationName,
+  trackUsage('search'),
   destinationController.getDestinationInfo
 );
 

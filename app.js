@@ -2,25 +2,31 @@ const express = require('express');
 const helmet = require('helmet');
 const cors = require('cors');
 const morgan = require('morgan');
-const connectDB = require('./config/db');
+const mongoose = require('mongoose');
 const logger = require('./config/logger');
 const aiRoutes = require('./routes/aiRoutes');
 const authRoutes = require('./routes/authRoutes');
 const destinationRoutes = require('./routes/destinationRoutes');
+const v1Routes = require('./routes/v1Routes');
 const { apiLimiter } = require('./middleware/rateLimiter');
 const { sanitizeBody } = require('./middleware/validation');
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
 
-require('dotenv').config();
-
 const app = express();
+
+// Behind Render's proxy: use the client IP from X-Forwarded-For so per-IP rate
+// limits apply per visitor instead of to everyone sharing the proxy address.
+app.set('trust proxy', Number(process.env.TRUST_PROXY_HOPS || 1));
 
 // ============================================
 // SECURITY MIDDLEWARE
 // ============================================
 
 // Security: Helmet middleware for security headers
-app.use(helmet());
+// This API is called from other origins (web app, Android app). CORS controls
+// who may read responses; CORP must allow cross-origin so beacons and fetches
+// from the app's own domain aren't blocked.
+app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 
 // CORS Configuration - Properly restrict origins
 const allowedOrigins = [
@@ -60,17 +66,11 @@ app.use(morgan('combined', { stream: logger.stream }));
 // BODY PARSING MIDDLEWARE
 // ============================================
 
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.json({ limit: '100kb' }));
+app.use(express.urlencoded({ extended: true, limit: '100kb' }));
 
 // Sanitize all request bodies to prevent XSS
 app.use(sanitizeBody);
-
-// ============================================
-// DATABASE CONNECTION
-// ============================================
-
-connectDB();
 
 // ============================================
 // HEALTH CHECK ENDPOINT
@@ -84,6 +84,12 @@ app.get('/health', (req, res) => {
     uptime: process.uptime(),
     environment: process.env.NODE_ENV
   });
+});
+
+// Readiness: only report ready when the database connection is usable
+app.get('/ready', (req, res) => {
+  const ready = mongoose.connection.readyState === 1;
+  res.status(ready ? 200 : 503).json({ success: ready, database: ready ? 'connected' : 'unavailable' });
 });
 
 // ============================================
@@ -101,6 +107,9 @@ app.use('/api/ai', aiRoutes);
 
 // Destination Routes (Wikipedia, Weather, Images, Travel Data)
 app.use('/api/destinations', destinationRoutes);
+
+// Versioned API (itineraries, events)
+app.use('/api/v1', v1Routes);
 
 // ============================================
 // ERROR HANDLING

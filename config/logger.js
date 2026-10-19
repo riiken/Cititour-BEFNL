@@ -51,12 +51,24 @@ const consoleFormat = winston.format.combine(
   )
 );
 
+const isProduction = process.env.NODE_ENV === 'production';
+
+// Local log files are opt-in: container disks (e.g. Render) are ephemeral, and
+// stdout is collected by the platform.
+const logToFiles = process.env.LOG_TO_FILES
+  ? process.env.LOG_TO_FILES === 'true'
+  : process.env.NODE_ENV === 'development';
+
 // Define transports
 const transports = [
-  // Console logging (always enabled)
+  // Console logging (always enabled; JSON in production for log drains)
   new winston.transports.Console({
-    format: consoleFormat
-  }),
+    format: isProduction ? format : consoleFormat,
+    silent: process.env.NODE_ENV === 'test'
+  })
+];
+
+const createFileTransports = () => [
 
   // Error logs - rotate daily, keep for 30 days
   new DailyRotateFile({
@@ -87,6 +99,10 @@ const transports = [
     format: format
   })
 ];
+
+if (logToFiles) {
+  transports.push(...createFileTransports());
+}
 
 // Create the logger
 const logger = winston.createLogger({

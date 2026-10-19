@@ -10,12 +10,12 @@ const logger = require('../config/logger');
 const WIKIPEDIA_API_URL = 'https://en.wikipedia.org/w/api.php';
 
 // Wikipedia requires a User-Agent header to identify the application
-const USER_AGENT = 'CitiTour/1.0 (Travel Planning App; https://github.com/yourrepo)';
+const { userAgent } = require('../config/http');
 
 // Axios instance with default headers
 const wikipediaAxios = axios.create({
   headers: {
-    'User-Agent': USER_AGENT
+    'User-Agent': userAgent()
   }
 });
 

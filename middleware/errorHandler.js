@@ -4,8 +4,18 @@ const logger = require('../config/logger');
  * Custom Error class for API errors
  */
 class ApiError extends Error {
+  /**
+   * @param {number} statusCode
+   * @param {string|Object} message - a string, or { message, ...details } where
+   *   details (e.g. rateLimit, upgrade) are returned to the client
+   */
   constructor(statusCode, message, isOperational = true, stack = '') {
-    super(message);
+    const isObject = message && typeof message === 'object';
+    super(isObject ? message.message : message);
+    if (isObject) {
+      const { message: _ignored, ...details } = message;
+      this.details = details;
+    }
     this.statusCode = statusCode;
     this.isOperational = isOperational;
     if (stack) {
@@ -67,9 +77,10 @@ const errorHandler = (err, req, res, next) => {
     error = convertToApiError(err);
   }
 
-  const { statusCode, message, isOperational } = error;
+  const { statusCode, message, isOperational, details } = error;
 
-  // Log error
+  // Log error. Request bodies are deliberately not logged: they can contain
+  // passwords and tokens.
   const logData = {
     statusCode,
     message: error.message,
@@ -77,9 +88,7 @@ const errorHandler = (err, req, res, next) => {
     method: req.method,
     ip: req.ip,
     userAgent: req.get('user-agent'),
-    body: req.body,
-    params: req.params,
-    query: req.query,
+    userId: req.user && req.user.id
   };
 
   if (statusCode >= 500) {
@@ -107,6 +116,7 @@ const errorHandler = (err, req, res, next) => {
       success: false,
       message,
       statusCode,
+      ...(details && details),
       ...(process.env.NODE_ENV === 'development' && {
         stack: error.stack
       })

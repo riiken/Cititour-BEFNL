@@ -3,6 +3,12 @@ const wikipediaService = require('../services/wikipediaService');
 const openWeatherService = require('../services/openWeatherService');
 const unsplashService = require('../services/unsplashService');
 const logger = require('../config/logger');
+const { createTtlCache } = require('../utils/ttlCache');
+
+// Aggregated destination data changes slowly; weather is the most volatile
+// part and 30 minutes is within OpenWeather's own update interval.
+const cache = createTtlCache({ ttlMs: Number(process.env.DESTINATION_CACHE_MINUTES || 30) * 60 * 1000 });
+const cacheKey = (...parts) => parts.map((part) => String(part).toLowerCase().trim()).join('|');
 
 /**
  * Get comprehensive destination data
@@ -33,7 +39,8 @@ const getDestination = async (req, res, next) => {
       units: units
     };
 
-    const data = await dataAggregationService.getDestinationData(name, options);
+    const data = await cache.wrap(cacheKey('destination', name, JSON.stringify(options)), () =>
+      dataAggregationService.getDestinationData(name, options));
 
     res.json({
       success: true,
@@ -61,7 +68,8 @@ const getTravelPlanningData = async (req, res, next) => {
 
     logger.info('Fetching travel planning data:', { name, units });
 
-    const data = await dataAggregationService.getTravelPlanningData(name, units);
+    const data = await cache.wrap(cacheKey('travel', name, units), () =>
+      dataAggregationService.getTravelPlanningData(name, units));
 
     res.json({
       success: true,
@@ -88,7 +96,8 @@ const getQuickOverview = async (req, res, next) => {
 
     logger.info('Fetching quick overview:', { name });
 
-    const data = await dataAggregationService.getQuickOverview(name);
+    const data = await cache.wrap(cacheKey('quick', name), () =>
+      dataAggregationService.getQuickOverview(name));
 
     res.json({
       success: true,
@@ -122,10 +131,8 @@ const searchDestinations = async (req, res, next) => {
 
     logger.info('Searching destinations:', { query, limit });
 
-    const results = await dataAggregationService.searchDestinations(
-      query,
-      parseInt(limit)
-    );
+    const results = await cache.wrap(cacheKey('search', query, limit), () =>
+      dataAggregationService.searchDestinations(query, parseInt(limit)));
 
     res.json({
       success: true,
@@ -154,10 +161,8 @@ const getDestinationImages = async (req, res, next) => {
 
     logger.info('Fetching destination images:', { name, count });
 
-    const images = await dataAggregationService.getDestinationImages(
-      name,
-      parseInt(count)
-    );
+    const images = await cache.wrap(cacheKey('images', name, count), () =>
+      dataAggregationService.getDestinationImages(name, parseInt(count)));
 
     res.json({
       success: true,
@@ -193,7 +198,8 @@ const getDestinationWeather = async (req, res, next) => {
 
     logger.info('Fetching destination weather:', { name, units });
 
-    const weather = await openWeatherService.getCurrentWeather(name, units);
+    const weather = await cache.wrap(cacheKey('weather', name, units), () =>
+      openWeatherService.getCurrentWeather(name, units));
 
     res.json({
       success: true,
@@ -228,7 +234,8 @@ const getDestinationForecast = async (req, res, next) => {
 
     logger.info('Fetching destination forecast:', { name, units });
 
-    const forecast = await openWeatherService.getForecast(name, units);
+    const forecast = await cache.wrap(cacheKey('forecast', name, units), () =>
+      openWeatherService.getForecast(name, units));
 
     res.json({
       success: true,

@@ -5,14 +5,12 @@ const router = express.Router();
 const { handleQuery } = require('../controllers/aiController');
 const { fetchHotels } = require('../controllers/searchResultsController');
 const { sendEmail } = require('../controllers/sendEmailController');
-const { getPopularLocation, fetchImageFromPexels } = require('../controllers/popularDestinationController');
 
 // Validation middleware
 const {
   validateAIQuery,
   validateLocationSearch,
-  validateEmail,
-  validatePopularLocation
+  validateEmail
 } = require('../middleware/validation');
 
 // Rate limiters
@@ -37,9 +35,9 @@ const { optionalAuth, trackUsage } = require('../middleware/auth');
  */
 router.post('/query',
   optionalAuth,        // Optional authentication (allows guests)
-  trackUsage('ai'),    // Track AI usage for authenticated users
   aiLimiter,           // Apply AI-specific rate limiting
   validateAIQuery,     // Validate query input
+  trackUsage('ai'),    // Count only requests that passed limits and validation
   handleQuery          // Handle request
 );
 
@@ -51,9 +49,9 @@ router.post('/query',
  */
 router.post('/recommendlocation',
   optionalAuth,           // Optional authentication
-  trackUsage('search'),   // Track search usage
   searchLimiter,          // Apply search-specific rate limiting
-  validateLocationSearch, // Validate location input
+  validateLocationSearch, // Validate location input (accepts `location` or `place`)
+  trackUsage('search'),   // Count only requests that passed limits and validation
   fetchHotels            // Handle request
 );
 
@@ -65,24 +63,22 @@ router.post('/recommendlocation',
  */
 router.post('/sendEmail',
   optionalAuth,        // Optional authentication
-  trackUsage('email'), // Track email usage
   emailLimiter,        // Apply strict email rate limiting
   validateEmail,       // Validate email fields
+  trackUsage('email'), // Count only requests that passed limits and validation
   sendEmail            // Handle request
 );
 
 /**
  * POST /api/ai/popularLocation
- * Get popular destinations with images
- * Rate Limited: 50 requests/15min (guest) or per-tier limit (authenticated)
- * Optional Authentication: Tracks usage for logged-in users
+ * Retired: this route never returned a response (it was wired to an image
+ * helper) and its AI-invented "discounts" are not shown anywhere.
  */
-router.post('/popularLocation',
-  optionalAuth,             // Optional authentication
-  trackUsage('search'),     // Track search usage
-  searchLimiter,            // Apply search-specific rate limiting
-  validatePopularLocation,  // Validate location input
-  fetchImageFromPexels     // Handle request
-);
+router.post('/popularLocation', (req, res) => {
+  res.status(410).json({
+    success: false,
+    message: 'This endpoint has been retired.'
+  });
+});
 
 module.exports = router;

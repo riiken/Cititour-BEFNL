@@ -23,7 +23,7 @@ const {
 } = require('../middleware/validation');
 
 // Auth middleware
-const { authenticate } = require('../middleware/auth');
+const { authenticate, optionalAuth } = require('../middleware/auth');
 
 // Rate limiters
 const { authLimiter } = require('../middleware/rateLimiter');
@@ -75,8 +75,8 @@ router.post('/refresh',
  * Requires: Valid access token
  */
 router.post('/logout',
-  authenticate,     // Verify user is logged in
-  logout            // Invalidate tokens
+  optionalAuth,     // Access token if still valid; otherwise the refresh token in the body
+  logout            // Invalidate the refresh token
 );
 
 /**

@@ -42,7 +42,8 @@ const authenticate = async (req, res, next) => {
     req.user = {
       id: user._id.toString(),
       email: user.email,
-      tier: user.tier
+      tier: user.tier,
+      role: user.isAdmin() ? 'admin' : 'user'
     };
 
     next();
@@ -81,12 +82,13 @@ const optionalAuth = async (req, res, next) => {
         req.user = {
           id: user._id.toString(),
           email: user.email,
-          tier: user.tier
+          tier: user.tier,
+          role: user.isAdmin() ? 'admin' : 'user'
         };
       }
     } catch (error) {
       // Token invalid/expired, but we continue without auth
-      logger.debug('Optional auth failed (continuing):', error.message);
+      logger.debug('Optional auth failed (continuing)', { error: error.message });
     }
 
     next();
@@ -171,11 +173,7 @@ const trackUsage = (requestType = 'ai') => {
               remaining: rateLimit.remaining
             },
             upgrade: {
-              message: 'Upgrade to Pro for unlimited requests',
-              plans: {
-                pro: { price: '$9.99/month', limit: 'unlimited' },
-                premium: { price: '$24.99/month', limit: 'unlimited + advanced features' }
-              },
+              message: 'Upgrade to Pro for higher limits',
               upgradeUrl: '/pricing'
             }
           });
@@ -230,27 +228,17 @@ const requireEmailVerification = (req, res, next) => {
 };
 
 /**
- * Admin Only Middleware
- * Restricts access to admin users only
- * Note: You'll need to add an 'role' field to User model for this
+ * Admin Only Middleware (use after authenticate)
  */
 const requireAdmin = (req, res, next) => {
-  try {
-    if (!req.user) {
-      throw new ApiError(401, 'Authentication required');
-    }
-
-    // TODO: Add role field to User model
-    // if (req.user.role !== 'admin') {
-    //   throw new ApiError(403, 'Admin access required');
-    // }
-
-    logger.warn('Admin check skipped (not implemented)');
-    next();
-
-  } catch (error) {
-    next(error);
+  if (!req.user) {
+    return next(new ApiError(401, 'Authentication required'));
   }
+  if (req.user.role !== 'admin') {
+    logger.warn('Admin access denied', { userId: req.user.id, url: req.originalUrl });
+    return next(new ApiError(403, 'Admin access required'));
+  }
+  return next();
 };
 
 module.exports = {

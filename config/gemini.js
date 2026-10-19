@@ -1,15 +1,28 @@
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
-// Initialize Gemini AI (FREE alternative to OpenAI!)
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+// Model IDs are configuration: Google retires model versions regularly.
+const DEFAULT_MODEL = () => process.env.GEMINI_MODEL || 'gemini-flash-lite-latest';
+
+// Created lazily so the client always sees the key loaded by dotenv.
+let genAI = null;
+const getClient = () => {
+  if (!process.env.GEMINI_API_KEY) {
+    throw new Error('Gemini API key not configured');
+  }
+  if (!genAI) {
+    genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+  }
+  return genAI;
+};
 
 /**
  * Get Gemini model instance
- * @param {string} modelName - Model to use (default: gemini-2.0-flash-exp)
+ * @param {string} modelName - Model to use (default: GEMINI_MODEL env)
+ * @param {Object} generationConfig - Optional generation config (e.g. JSON mode)
  * @returns {Object} Gemini model instance
  */
-const getGeminiModel = (modelName = "gemini-2.0-flash-lite") => {
-  return genAI.getGenerativeModel({ model: modelName });
+const getGeminiModel = (modelName = DEFAULT_MODEL(), generationConfig = undefined) => {
+  return getClient().getGenerativeModel({ model: modelName, generationConfig });
 };
 
 /**
@@ -17,9 +30,12 @@ const getGeminiModel = (modelName = "gemini-2.0-flash-lite") => {
  * @param {string} prompt - Travel query prompt
  * @returns {Promise<string>} AI-generated response
  */
-const generateTravelRecommendation = async (prompt) => {
+const generateTravelRecommendation = async (prompt, { json = false } = {}) => {
   try {
-    const model = getGeminiModel();
+    const model = getGeminiModel(
+      DEFAULT_MODEL(),
+      json ? { responseMimeType: 'application/json', temperature: 0.6 } : undefined
+    );
 
     const result = await model.generateContent(prompt);
     const response = await result.response;
@@ -121,7 +137,7 @@ Please provide a detailed, structured response in JSON format with these section
 IMPORTANT: Return ONLY valid JSON, no markdown formatting, no code blocks, no additional text.`;
 
   try {
-    const model = getGeminiModel("gemini-2.0-flash-exp");
+    const model = getGeminiModel(DEFAULT_MODEL(), { responseMimeType: 'application/json' });
 
     const result = await model.generateContent(prompt);
     const response = await result.response;

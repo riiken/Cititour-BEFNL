@@ -10,8 +10,7 @@ const validateRequest = (req, res, next) => {
       success: false,
       errors: errors.array().map(err => ({
         field: err.path,
-        message: err.msg,
-        value: err.value
+        message: err.msg
       }))
     });
   }
@@ -26,6 +25,10 @@ const validateRequest = (req, res, next) => {
  * Validate AI query endpoint
  * POST /api/ai/query
  */
+// Letters/numbers in any script (Hindi, accented names, ...) plus common punctuation
+const TEXT_PATTERN = /^[\p{L}\p{M}\p{N}\s,?.!'’&:;()\/₹$€£%+-]+$/u;
+const PLACE_PATTERN = /^[\p{L}\p{M}\p{N}\s,.'’()-]+$/u;
+
 const validateAIQuery = [
   body('query')
     .trim()
@@ -33,8 +36,18 @@ const validateAIQuery = [
     .withMessage('Query is required')
     .isLength({ min: 3, max: 500 })
     .withMessage('Query must be between 3 and 500 characters')
-    .matches(/^[a-zA-Z0-9\s,?.!'-]+$/)
+    .matches(TEXT_PATTERN)
     .withMessage('Query contains invalid characters'),
+
+  // Optional structured trip details (newer clients)
+  body('destination').optional().trim().isLength({ min: 2, max: 100 }).matches(PLACE_PATTERN)
+    .withMessage('Destination contains invalid characters'),
+  body('checkIn').optional().isISO8601({ strict: true }).withMessage('checkIn must be YYYY-MM-DD'),
+  body('checkOut').optional().isISO8601({ strict: true }).withMessage('checkOut must be YYYY-MM-DD'),
+  body('travellers').optional().isInt({ min: 1, max: 30 }).toInt(),
+  body('budget').optional().trim().isLength({ max: 60 }).matches(TEXT_PATTERN),
+  body('interests').optional().isArray({ max: 10 }),
+  body('interests.*').optional().trim().isLength({ min: 2, max: 40 }).matches(PLACE_PATTERN),
   validateRequest
 ];
 
@@ -42,15 +55,27 @@ const validateAIQuery = [
  * Validate location search endpoint
  * POST /api/ai/recommendlocation
  */
+// Clients have sent the city as `location` (web/Android app) and as `place`.
+// Accept either and normalise to `location`, which the controller reads.
+const normaliseLocationField = (req, res, next) => {
+  if (req.body && !req.body.location && req.body.place) {
+    req.body.location = req.body.place;
+  }
+  next();
+};
+
 const validateLocationSearch = [
-  body('place')
+  normaliseLocationField,
+  body('location')
     .trim()
     .notEmpty()
-    .withMessage('Place is required')
+    .withMessage('Location is required')
     .isLength({ min: 2, max: 100 })
-    .withMessage('Place must be between 2 and 100 characters')
-    .matches(/^[a-zA-Z\s,'-]+$/)
-    .withMessage('Place name contains invalid characters'),
+    .withMessage('Location must be between 2 and 100 characters')
+    .matches(PLACE_PATTERN)
+    .withMessage('Location contains invalid characters'),
+
+  body('sort').optional().isString().isLength({ max: 30 }),
 
   body('checkIn')
     .optional()
@@ -186,6 +211,10 @@ const validateRegister = [
     .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/)
     .withMessage('Password must contain at least one uppercase letter, one lowercase letter, and one number'),
 
+  body('acceptTerms')
+    .custom((value) => value === true || value === 'true')
+    .withMessage('Please accept the Terms & Privacy Policy'),
+
   validateRequest
 ];
 
@@ -266,6 +295,33 @@ const validateProfileUpdate = [
 ];
 
 // ============================================
+// VALIDATION RULES FOR DESTINATION ENDPOINTS
+// ============================================
+
+const validateDestinationName = [
+  param('name')
+    .trim()
+    .isLength({ min: 2, max: 100 })
+    .withMessage('Destination must be between 2 and 100 characters')
+    .matches(PLACE_PATTERN)
+    .withMessage('Destination contains invalid characters'),
+  query('count').optional().isInt({ min: 1, max: 20 }).withMessage('count must be 1-20').toInt(),
+  query('units').optional().isIn(['metric', 'imperial']).withMessage('units must be metric or imperial'),
+  validateRequest
+];
+
+const validateDestinationSearch = [
+  query('q')
+    .trim()
+    .isLength({ min: 2, max: 100 })
+    .withMessage('Search query must be between 2 and 100 characters')
+    .matches(PLACE_PATTERN)
+    .withMessage('Search query contains invalid characters'),
+  query('limit').optional().isInt({ min: 1, max: 10 }).withMessage('limit must be 1-10').toInt(),
+  validateRequest
+];
+
+// ============================================
 // SANITIZATION HELPERS
 // ============================================
 
@@ -285,10 +341,14 @@ const sanitizeInput = (input) => {
 /**
  * Middleware to sanitize all req.body fields
  */
+// Secrets are compared/hashed, never rendered; altering them would change the
+// user's actual password.
+const UNSANITIZED_FIELDS = new Set(['password', 'currentPassword', 'newPassword', 'refreshToken']);
+
 const sanitizeBody = (req, res, next) => {
   if (req.body && typeof req.body === 'object') {
     Object.keys(req.body).forEach(key => {
-      if (typeof req.body[key] === 'string') {
+      if (typeof req.body[key] === 'string' && !UNSANITIZED_FIELDS.has(key)) {
         req.body[key] = sanitizeInput(req.body[key]);
       }
     });
@@ -305,6 +365,10 @@ module.exports = {
   validateLocationSearch,
   validateEmail,
   validatePopularLocation,
+
+  // Destination endpoint validation
+  validateDestinationName,
+  validateDestinationSearch,
 
   // Auth endpoint validation
   validateRegister,

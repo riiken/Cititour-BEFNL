@@ -2,7 +2,6 @@ const wikipediaService = require('./wikipediaService');
 const openWeatherService = require('./openWeatherService');
 const unsplashService = require('./unsplashService');
 const logger = require('../config/logger');
-const { callAiApi } = require('./aiService');
 
 /**
  * Data Aggregation Service
@@ -256,9 +255,6 @@ const getTravelPlanningData = async (destination, units = 'metric') => {
       includeRelated: true,
       units: units
     });
-const ndata = await callAiApi(`Plan a trip for ${destination}`);
-    console.log('📊 AI Data Type:', typeof ndata);
-    console.log('📊 AI Data:', JSON.stringify(ndata, null, 2));
 
     // Enhance with travel-specific insights
     const travelData = {
@@ -280,7 +276,8 @@ const ndata = await callAiApi(`Plan a trip for ${destination}`);
       } : null,
       weatherForecast: data.data.forecast || [],
       recommendations: generateTravelRecommendations(data),
-      aiRecommendation:ndata,
+      // Kept for response compatibility; AI guides are served by /api/ai/query (cached)
+      aiRecommendation: null,
       bestTimeToVisit: determineBestTimeToVisit(data.data.forecast),
       thingsToDo: data.data.info ? extractActivitiesFromCategories(data.data.info.categories) : [],
       nearbyDestinations: data.data.relatedDestinations || [],
@@ -560,8 +557,8 @@ const determineBestTimeToVisit = (forecast) => {
     const temp = day.avgTemperature;
     if (temp < 15) score -= 20;
     else if (temp < 20) score -= 10;
-    else if (temp > 30) score -= 15;
     else if (temp > 35) score -= 30;
+    else if (temp > 30) score -= 15;
 
     // Precipitation scoring
     score -= day.precipitationProbability * 0.5;

@@ -1,0 +1,13 @@
+process.env.NODE_ENV = 'test';
+process.env.JWT_SECRET = 'test-access-secret-that-is-long-enough-123';
+process.env.JWT_REFRESH_SECRET = 'test-refresh-secret-that-is-long-enough-456';
+process.env.TRIPADVISOR_API_URL = 'https://provider.test';
+process.env.RAPIDAPI_KEY = 'test-key';
+process.env.GEMINI_API_KEY = 'test-gemini';
+process.env.GROQ_API_KEY = 'test-groq';
+delete process.env.EMAIL_USER;
+delete process.env.EMAIL_PASS;
+delete process.env.RECIPIENT_EMAIL;
+delete process.env.APP_PASS;
+delete process.env.BOOKING_AFFILIATE_ID;
+delete process.env.GYG_PARTNER_ID;
