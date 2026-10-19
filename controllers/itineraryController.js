@@ -8,6 +8,8 @@ const { planItinerary, ITINERARY_PROMPT_VERSION } = require('../services/itinera
 const { reserveAiGeneration } = require('../services/aiBudget');
 const { mapsSearchLink, hotelBookingLink, activityBookingLink } = require('../services/linkBuilder');
 const { withPlaceLinks } = require('../services/placeLinks');
+const { buildIcs, buildPackingList } = require('../services/tripExtras');
+const { appUrl } = require('../config/mailer');
 const { findApprovedNear } = require('../services/listingService');
 const { distanceKm } = require('../services/destinationDataService');
 
@@ -230,6 +232,35 @@ const getItinerary = async (req, res, next) => {
   }
 };
 
+/** GET /itineraries/:id/calendar.ics: the plan as calendar events. */
+const calendar = async (req, res, next) => {
+  try {
+    const itinerary = await Itinerary.findOne({ publicId: req.params.id });
+    if (!itinerary) return res.status(404).json({ success: false, message: 'This trip plan was not found.' });
+    const trip = present(itinerary);
+    const tripUrl = `${appUrl()}/trip/${trip.id}`;
+    const filename = `${(trip.destination.name || 'trip').replace(/[^\w-]+/g, '-').toLowerCase()}-trip.ics`;
+    res.set({
+      'Content-Type': 'text/calendar; charset=utf-8',
+      'Content-Disposition': `attachment; filename="${filename}"`
+    });
+    return res.send(buildIcs(trip, tripUrl));
+  } catch (error) {
+    return next(error);
+  }
+};
+
+/** GET /itineraries/:id/packing: rule-based packing checklist for the trip. */
+const packing = async (req, res, next) => {
+  try {
+    const itinerary = await Itinerary.findOne({ publicId: req.params.id }).lean();
+    if (!itinerary) return res.status(404).json({ success: false, message: 'This trip plan was not found.' });
+    return res.json({ success: true, data: buildPackingList(itinerary) });
+  } catch (error) {
+    return next(error);
+  }
+};
+
 const recordEvent = async (req, res) => {
   const { type, partner, placement, itineraryId, destination } = req.body;
   try {
@@ -241,4 +272,4 @@ const recordEvent = async (req, res) => {
   return res.status(204).end();
 };
 
-module.exports = { createItinerary, getItinerary, recordEvent, present, buildCacheKey, copyForUser, newPublicId, snapshot };
+module.exports = { createItinerary, getItinerary, calendar, packing, recordEvent, present, buildCacheKey, copyForUser, newPublicId, snapshot };

@@ -4,7 +4,7 @@ const { body, param, query } = require('express-validator');
 const { authenticate, optionalAuth, trackUsage } = require('../middleware/auth');
 const { aiLimiter } = require('../middleware/rateLimiter');
 const { validateRequest } = require('../middleware/validation');
-const { createItinerary, getItinerary, recordEvent } = require('../controllers/itineraryController');
+const { createItinerary, getItinerary, calendar, packing, recordEvent } = require('../controllers/itineraryController');
 const listingRoutes = require('./listingRoutes');
 const tripEdit = require('../controllers/tripEditController');
 const { explore } = require('../controllers/exploreController');
@@ -97,6 +97,8 @@ const tripId = param('id').isString().isLength({ min: 8, max: 20 }).matches(/^[A
 const SLOTS = ['morning', 'lunch', 'afternoon', 'evening', 'dinner'];
 const editLimiter = rateLimit({ windowMs: 60 * 1000, max: 60, standardHeaders: true, legacyHeaders: false });
 
+router.get('/itineraries/:id/calendar.ics', tripId, validateRequest, calendar);
+router.get('/itineraries/:id/packing', tripId, validateRequest, packing);
 router.get('/me/trips', authenticate, tripEdit.myTrips);
 router.post('/itineraries/:id/copy', authenticate, tripId, validateRequest, tripEdit.saveCopy);
 router.delete('/itineraries/:id', authenticate, tripId, validateRequest, tripEdit.deleteTrip);
