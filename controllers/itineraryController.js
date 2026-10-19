@@ -25,7 +25,8 @@ const buildCacheKey = (request) => [
   request.checkOut,
   request.travellers,
   normaliseKey(request.budget),
-  (request.interests || []).map(normaliseKey).sort().join(',')
+  (request.interests || []).map(normaliseKey).sort().join(','),
+  request.language || 'en'
 ].join('|');
 
 /** A private copy of a plan for a user (their own share link, editable). */
@@ -107,7 +108,8 @@ const createItinerary = async (req, res, next) => {
     checkOut: req.body.checkOut,
     travellers: req.body.travellers || 2,
     budget: req.body.budget || 'Mid-range',
-    interests: Array.isArray(req.body.interests) ? req.body.interests.slice(0, 10) : []
+    interests: Array.isArray(req.body.interests) ? req.body.interests.slice(0, 10) : [],
+    language: req.body.language === 'hi' ? 'hi' : 'en'
   };
   const cacheKey = buildCacheKey(request);
 

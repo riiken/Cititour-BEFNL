@@ -65,6 +65,20 @@ describe('POST /api/v1/itineraries', () => {
     expect(plan.sources).toContain('Wikivoyage');
   });
 
+  it('asks for Hindi text when the traveller chose Hindi, and caches per language', async () => {
+    gemini.generateTravelRecommendation.mockResolvedValue(JSON.stringify({
+      title: 'शाही उदयपुर', days: [{ day: 1, items: [{ id: 'A1', slot: 'afternoon', note: 'सुबह जल्दी जाएं' }] }], stays: []
+    }));
+    const hindi = await request(app).post('/api/v1/itineraries').send({ ...body, language: 'hi' });
+    expect(hindi.status).toBe(201);
+    expect(hindi.body.data.title).toBe('शाही उदयपुर');
+    expect(hindi.body.data.request.language).toBe('hi');
+    expect(gemini.generateTravelRecommendation.mock.calls[0][0]).toContain('Hindi (Devanagari script)');
+
+    const english = await request(app).post('/api/v1/itineraries').send(body);
+    expect(english.body.reused).toBeUndefined(); // a different language is a different plan
+  });
+
   it('still returns a plan when every AI provider fails', async () => {
     gemini.generateTravelRecommendation.mockRejectedValue(new Error('down'));
     groq.generateGroqRecommendation.mockRejectedValue(new Error('down'));

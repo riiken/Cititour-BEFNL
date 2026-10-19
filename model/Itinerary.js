@@ -67,7 +67,8 @@ const itinerarySchema = new mongoose.Schema({
     checkOut: String,
     travellers: Number,
     budget: String,
-    interests: [String]
+    interests: [String],
+    language: { type: String, enum: ['en', 'hi'], default: 'en' }
   },
   destination: {
     name: String,

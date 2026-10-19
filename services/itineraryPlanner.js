@@ -385,7 +385,9 @@ Rules:
 - For "stays", pick up to 3 IDs from HOTELS (covering different price levels, favouring the stated budget), or from STAY AREAS when no hotels are listed. The note says who the option suits.
 - If a list is empty, skip that kind of item; fewer items are better than invented ones.
 - Use the currency INR for estimates unless the destination is outside India.
-- Write title, summary, theme, notes and tips in the same language as the trip details.`;
+- ${request.language === 'hi'
+    ? 'Write title, summary, theme, notes, budget text and tips in Hindi (Devanagari script), in simple everyday Hindi. Keep place names exactly as listed (do not translate or transliterate them). Write amounts with the ₹ symbol.'
+    : 'Write title, summary, theme, notes and tips in English.'}`;
 };
 
 // ---------------------------------------------------------------------------

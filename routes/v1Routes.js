@@ -37,6 +37,7 @@ const validateItineraryRequest = [
   body('budget').optional().isIn(['Budget', 'Mid-range', 'Luxury']).withMessage('Budget must be Budget, Mid-range or Luxury'),
   body('interests').optional().isArray({ max: 10 }),
   body('interests.*').optional().isString().trim().isLength({ min: 2, max: 40 }).matches(PLACE_PATTERN),
+  body('language').optional().isIn(['en', 'hi']),
   validateRequest
 ];
 
