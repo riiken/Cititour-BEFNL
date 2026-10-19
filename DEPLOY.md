@@ -42,7 +42,7 @@ Browser / Android app ──► cititour (Render static site, Angular)
    |---|---|
    | `MONGODB_URI` | the Atlas string from step 1 |
    | `ADMIN_EMAILS` | `admin@paathly.in` |
-   | `FRONTEND_URL_PROD`, `APP_URL` | `https://cititour.onrender.com` (or your own domain later) |
+   | `FRONTEND_URL_PROD`, `APP_URL` | your web address, e.g. `https://cititour.aionboard.net` (comma-separate several in `FRONTEND_URL_PROD`; the first is used in emails) |
    | `CONTACT_EMAIL` | an address Wikimedia/OSM can contact you at |
    | `GEMINI_API_KEY`, `GROQ_API_KEY` | from your local `.env` |
    | `OPENWEATHER_API_KEY`, `UNSPLASH_API_KEY` | from your local `.env` (optional) |
