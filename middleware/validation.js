@@ -291,6 +291,8 @@ const validateProfileUpdate = [
     .matches(/^[a-zA-Z\s'-]+$/)
     .withMessage('Name contains invalid characters'),
 
+  body('tripReminders').optional().isBoolean().toBoolean(),
+
   validateRequest
 ];
 

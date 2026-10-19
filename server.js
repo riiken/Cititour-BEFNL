@@ -13,6 +13,7 @@ const PORT = process.env.PORT || 5000;
 
 const start = async () => {
   await connectDB();
+  require('./services/reminderService').startReminderScheduler();
 
   const server = app.listen(PORT, () => {
     logger.info(`🚀 Server is running on port ${PORT}`, {

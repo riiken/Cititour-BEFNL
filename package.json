@@ -6,7 +6,8 @@
     "start": "node server.js",
     "dev": "node --watch server.js",
     "test": "jest --runInBand",
-    "stats": "node scripts/stats.js"
+    "stats": "node scripts/stats.js",
+    "reminders": "node scripts/reminders.js"
   },
   "keywords": [],
   "author": "",

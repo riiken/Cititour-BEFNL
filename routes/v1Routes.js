@@ -120,6 +120,30 @@ router.patch('/itineraries/:id', authenticate, editLimiter, tripId,
   validateRequest, tripEdit.updateTrip);
 
 /**
+ * GET /api/v1/unsubscribe?u=<userId>&t=<signed token>
+ * One-click opt-out from trip reminder emails (link in every reminder).
+ */
+router.get('/unsubscribe',
+  query('u').isMongoId(),
+  query('t').isString().isLength({ min: 32, max: 32 }),
+  validateRequest,
+  async (req, res, next) => {
+    try {
+      const { verifyUnsubscribe } = require('../services/reminderService');
+      const User = require('../model/User');
+      if (!verifyUnsubscribe(req.query.u, req.query.t)) {
+        return res.status(400).type('html').send('<p style="font-family:Arial">This unsubscribe link is not valid.</p>');
+      }
+      await User.updateOne({ _id: req.query.u }, { $set: { 'notifications.tripReminders': false } });
+      return res.type('html').send(`<div style="font-family:Arial,sans-serif;max-width:480px;margin:60px auto;text-align:center">
+        <h2 style="color:#86B817">CitiTour</h2><p>You won't receive trip reminder emails any more.</p></div>`);
+    } catch (error) {
+      return next(error);
+    }
+  }
+);
+
+/**
  * POST /api/v1/events
  * First-party click/share tracking (no personal data).
  */

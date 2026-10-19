@@ -238,11 +238,12 @@ const getProfile = async (req, res, next) => {
 const updateProfile = async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const { name } = req.body;
+    const { name, tripReminders } = req.body;
 
     // Only allow updating certain fields
     const allowedUpdates = {};
     if (name) allowedUpdates.name = name.trim();
+    if (typeof tripReminders === 'boolean') allowedUpdates['notifications.tripReminders'] = tripReminders;
 
     // Prevent empty updates
     if (Object.keys(allowedUpdates).length === 0) {

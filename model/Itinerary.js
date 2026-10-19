@@ -88,6 +88,7 @@ const itinerarySchema = new mongoose.Schema({
   views: { type: Number, default: 0 },
   // Personal copies: edited plans are never reused for other travellers
   edited: { type: Boolean, default: false },
+  reminders: { preTripSentAt: { type: Date, default: null } },
   copiedFrom: { type: String }
 }, { timestamps: true });
 

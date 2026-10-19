@@ -32,6 +32,8 @@ services:
         sync: false               # same as FRONTEND_URL_PROD; identifies the app to Wikipedia/OSM
       - key: CONTACT_EMAIL
         sync: false
+      - key: API_URL
+        value: https://cititour-befnl.onrender.com   # used in email unsubscribe links
       # --- AI
       - key: GEMINI_API_KEY
         sync: false

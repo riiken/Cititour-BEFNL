@@ -154,6 +154,11 @@ const userSchema = new mongoose.Schema({
     select: false
   },
 
+  // Email preferences
+  notifications: {
+    tripReminders: { type: Boolean, default: true }
+  },
+
   // Consent record
   termsAcceptedAt: {
     type: Date,
@@ -337,6 +342,9 @@ userSchema.methods.toProfileJSON = function() {
     subscription: {
       status: this.subscription.status,
       endDate: this.subscription.endDate
+    },
+    notifications: {
+      tripReminders: !(this.notifications && this.notifications.tripReminders === false)
     },
     createdAt: this.createdAt,
     lastLogin: this.lastLogin
